@@ -1,0 +1,541 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A7CDC85F8F2970340407C9A /* MPVEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1502E8485E9072402A3AD77 /* MPVEngine.swift */; };
+		28300FA54868772F3F4142B6 /* AppSettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FEB576328E522B87F0FF31C /* AppSettingsKeys.swift */; };
+		2B6BE2819183C8DB6B3D8AC1 /* ScrubberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA55D7BE7C938101D560358 /* ScrubberView.swift */; };
+		3014C4F4567A9537C68E79F3 /* PlaybackControlsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B37E3132ADFF312ABE3E05 /* PlaybackControlsBar.swift */; };
+		3492F13AD4D5C67443C9C40D /* AVFoundationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6015F736AF75A57FD9D24A25 /* AVFoundationEngine.swift */; };
+		4423EF3C9917EA43CD4F76AD /* MediaItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27E47776555DA32F12625234 /* MediaItem.swift */; };
+		473ED1DD6A872E34140EC692 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C55E6BC275DB672915EAA0 /* ContentView.swift */; };
+		482CE246061B16058BF33542 /* ControlButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B471B5F8C6972C43C798EF2 /* ControlButton.swift */; };
+		495288AD875FBE33E30C6886 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2269551A50F7412EF5C4435C /* SettingsView.swift */; };
+		6177F5CA7324233F4A627F06 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DEFF983C6AEE7BE3F2F0F28E /* Assets.xcassets */; };
+		7575F225AF21D45D135248AE /* VolumeControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2DE4C984D23BDE612D8B7CB /* VolumeControl.swift */; };
+		8005D408648083CD463C4B1B /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9D881F51777620B02E551E /* WindowAccessor.swift */; };
+		A1F8F53C3E0FF83365F327B2 /* TimeFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCFB81A87249188451B967A /* TimeFormatter.swift */; };
+		A452D5FD2B04AC7BCD3E72C8 /* PlaylistSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D444ADC1D5347331A84254F8 /* PlaylistSidebarView.swift */; };
+		AF7A2BC2FF1006F0A75FAFB7 /* MediaTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C006E99B490A91F9BBE24D4 /* MediaTrack.swift */; };
+		B157F7CEC7F4364ECBA5673D /* MediaInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 542B908EBF8766172E588F47 /* MediaInfoView.swift */; };
+		B793085401767FC229839086 /* MPVVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5777D6160099F2E8A72A998D /* MPVVideoView.swift */; };
+		BC8606EB700FC43C18A28BD8 /* PlaybackSpeedMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4018277FF5629D537F9C39 /* PlaybackSpeedMenu.swift */; };
+		C0DE3A81280610DF512B8E66 /* PlayerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4F55D5B12A74DDCF7C1657 /* PlayerViewModel.swift */; };
+		C223A973C8E506B953813318 /* PlayerContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F69F0B5DCA19B4AB6EA6068 /* PlayerContainerView.swift */; };
+		C728F9BC94FF20B4C14EBB48 /* VisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C492C7B056D1CC3A840B2A9 /* VisualEffectView.swift */; };
+		C8FFC668CF6925C5BA0F244C /* VideoLayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785CB6D7748F5943CBB0A631 /* VideoLayerView.swift */; };
+		DFAC0C09995A169B2D9CF50A /* TrackMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BECFC81DFDDDA40A08E8CA7 /* TrackMenuButton.swift */; };
+		E72FBFE6C6ECA5CF58DEF2A5 /* PlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 427E9039867F139A0CB0740B /* PlaybackEngine.swift */; };
+		F476BF0B7B22D01E9AF397AB /* MediaPlayerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7B344D17A64BE380BC63B51 /* MediaPlayerApp.swift */; };
+		FDC06B6D0DFBE4386F48A210 /* OpenNetworkStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F77681E32BD2647E2112C87 /* OpenNetworkStreamView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0BECFC81DFDDDA40A08E8CA7 /* TrackMenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMenuButton.swift; sourceTree = "<group>"; };
+		0C492C7B056D1CC3A840B2A9 /* VisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectView.swift; sourceTree = "<group>"; };
+		0F77681E32BD2647E2112C87 /* OpenNetworkStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenNetworkStreamView.swift; sourceTree = "<group>"; };
+		1CCFB81A87249188451B967A /* TimeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatter.swift; sourceTree = "<group>"; };
+		2269551A50F7412EF5C4435C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		27E47776555DA32F12625234 /* MediaItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaItem.swift; sourceTree = "<group>"; };
+		2FEB576328E522B87F0FF31C /* AppSettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsKeys.swift; sourceTree = "<group>"; };
+		3B471B5F8C6972C43C798EF2 /* ControlButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlButton.swift; sourceTree = "<group>"; };
+		3BA55D7BE7C938101D560358 /* ScrubberView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrubberView.swift; sourceTree = "<group>"; };
+		427E9039867F139A0CB0740B /* PlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackEngine.swift; sourceTree = "<group>"; };
+		47B37E3132ADFF312ABE3E05 /* PlaybackControlsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackControlsBar.swift; sourceTree = "<group>"; };
+		4C006E99B490A91F9BBE24D4 /* MediaTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTrack.swift; sourceTree = "<group>"; };
+		542B908EBF8766172E588F47 /* MediaInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaInfoView.swift; sourceTree = "<group>"; };
+		5777D6160099F2E8A72A998D /* MPVVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVVideoView.swift; sourceTree = "<group>"; };
+		579D0FFDD62A4D2A44B3FD60 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6015F736AF75A57FD9D24A25 /* AVFoundationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVFoundationEngine.swift; sourceTree = "<group>"; };
+		785CB6D7748F5943CBB0A631 /* VideoLayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoLayerView.swift; sourceTree = "<group>"; };
+		7ACDAE2354C6F66649E35A39 /* MediaPlayer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MediaPlayer.entitlements; sourceTree = "<group>"; };
+		7C4F55D5B12A74DDCF7C1657 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
+		7F69F0B5DCA19B4AB6EA6068 /* PlayerContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerContainerView.swift; sourceTree = "<group>"; };
+		A1502E8485E9072402A3AD77 /* MPVEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVEngine.swift; sourceTree = "<group>"; };
+		B7B344D17A64BE380BC63B51 /* MediaPlayerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerApp.swift; sourceTree = "<group>"; };
+		B8C55E6BC275DB672915EAA0 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		C2DE4C984D23BDE612D8B7CB /* VolumeControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeControl.swift; sourceTree = "<group>"; };
+		D444ADC1D5347331A84254F8 /* PlaylistSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistSidebarView.swift; sourceTree = "<group>"; };
+		DB4018277FF5629D537F9C39 /* PlaybackSpeedMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackSpeedMenu.swift; sourceTree = "<group>"; };
+		DC9D881F51777620B02E551E /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
+		DEFF983C6AEE7BE3F2F0F28E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E1DFEFF772CC9E18E785CA45 /* MediaPlayer-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "MediaPlayer-Bridging-Header.h"; sourceTree = "<group>"; };
+		E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MediaPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0FAC46B9B25B923DE83E34E4 /* Playback */ = {
+			isa = PBXGroup;
+			children = (
+				6015F736AF75A57FD9D24A25 /* AVFoundationEngine.swift */,
+				A1502E8485E9072402A3AD77 /* MPVEngine.swift */,
+				427E9039867F139A0CB0740B /* PlaybackEngine.swift */,
+			);
+			path = Playback;
+			sourceTree = "<group>";
+		};
+		16420A21480630CB71199123 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				DEFF983C6AEE7BE3F2F0F28E /* Assets.xcassets */,
+				579D0FFDD62A4D2A44B3FD60 /* Info.plist */,
+				E1DFEFF772CC9E18E785CA45 /* MediaPlayer-Bridging-Header.h */,
+				7ACDAE2354C6F66649E35A39 /* MediaPlayer.entitlements */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		16945D39631BF359AB0B09E8 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B8C55E6BC275DB672915EAA0 /* ContentView.swift */,
+				5E78FAB5609E7D4BDDFD9CC8 /* Controls */,
+				3369CBF188AA070E3779F133 /* MediaInfo */,
+				C5FB8185F520234D4303F8F4 /* Player */,
+				9D550322EA445E2522DC4D84 /* Settings */,
+				29E0A3CBA71F0798A5BA99E4 /* Shared */,
+				82CF811070F10D91165E8FAD /* Sidebar */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		29E0A3CBA71F0798A5BA99E4 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				3B471B5F8C6972C43C798EF2 /* ControlButton.swift */,
+				0F77681E32BD2647E2112C87 /* OpenNetworkStreamView.swift */,
+				1CCFB81A87249188451B967A /* TimeFormatter.swift */,
+				0C492C7B056D1CC3A840B2A9 /* VisualEffectView.swift */,
+				DC9D881F51777620B02E551E /* WindowAccessor.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		3369CBF188AA070E3779F133 /* MediaInfo */ = {
+			isa = PBXGroup;
+			children = (
+				542B908EBF8766172E588F47 /* MediaInfoView.swift */,
+			);
+			path = MediaInfo;
+			sourceTree = "<group>";
+		};
+		3FC077C42F5E39CC53E70DDF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		45FE7937F9B30BF8577CD2EC /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				7C4F55D5B12A74DDCF7C1657 /* PlayerViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		4966F4A6CC9B89348E636C97 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B7B344D17A64BE380BC63B51 /* MediaPlayerApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		5E78FAB5609E7D4BDDFD9CC8 /* Controls */ = {
+			isa = PBXGroup;
+			children = (
+				47B37E3132ADFF312ABE3E05 /* PlaybackControlsBar.swift */,
+				DB4018277FF5629D537F9C39 /* PlaybackSpeedMenu.swift */,
+				3BA55D7BE7C938101D560358 /* ScrubberView.swift */,
+				0BECFC81DFDDDA40A08E8CA7 /* TrackMenuButton.swift */,
+				C2DE4C984D23BDE612D8B7CB /* VolumeControl.swift */,
+			);
+			path = Controls;
+			sourceTree = "<group>";
+		};
+		77E9773C3E4B9E270463D4EF /* MediaPlayer */ = {
+			isa = PBXGroup;
+			children = (
+				4966F4A6CC9B89348E636C97 /* App */,
+				F4C757CA05867ACC58A1BD9B /* Models */,
+				0FAC46B9B25B923DE83E34E4 /* Playback */,
+				16420A21480630CB71199123 /* Resources */,
+				45FE7937F9B30BF8577CD2EC /* ViewModels */,
+				16945D39631BF359AB0B09E8 /* Views */,
+			);
+			path = MediaPlayer;
+			sourceTree = "<group>";
+		};
+		82CF811070F10D91165E8FAD /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				D444ADC1D5347331A84254F8 /* PlaylistSidebarView.swift */,
+			);
+			path = Sidebar;
+			sourceTree = "<group>";
+		};
+		9D550322EA445E2522DC4D84 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				2269551A50F7412EF5C4435C /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		BAC2094FE10767AB4712E755 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				77E9773C3E4B9E270463D4EF /* MediaPlayer */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		C5FB8185F520234D4303F8F4 /* Player */ = {
+			isa = PBXGroup;
+			children = (
+				5777D6160099F2E8A72A998D /* MPVVideoView.swift */,
+				7F69F0B5DCA19B4AB6EA6068 /* PlayerContainerView.swift */,
+				785CB6D7748F5943CBB0A631 /* VideoLayerView.swift */,
+			);
+			path = Player;
+			sourceTree = "<group>";
+		};
+		CC1F42D75A15244FBDDC55CD = {
+			isa = PBXGroup;
+			children = (
+				BAC2094FE10767AB4712E755 /* Sources */,
+				3FC077C42F5E39CC53E70DDF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F4C757CA05867ACC58A1BD9B /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2FEB576328E522B87F0FF31C /* AppSettingsKeys.swift */,
+				27E47776555DA32F12625234 /* MediaItem.swift */,
+				4C006E99B490A91F9BBE24D4 /* MediaTrack.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A4A6670FE6DA8CFEBA780267 /* MediaPlayer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ACF49FF8DEA911A5E2B4BFA7 /* Build configuration list for PBXNativeTarget "MediaPlayer" */;
+			buildPhases = (
+				06AFCC8CE274CE69349EA371 /* Sources */,
+				85036B47D85B2FB7D19511C9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MediaPlayer;
+			packageProductDependencies = (
+			);
+			productName = MediaPlayer;
+			productReference = E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0E3BA5A907C184F0A04ADE39 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					A4A6670FE6DA8CFEBA780267 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 85F3DD08D430862498D96B5C /* Build configuration list for PBXProject "MediaPlayer" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CC1F42D75A15244FBDDC55CD;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 3FC077C42F5E39CC53E70DDF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A4A6670FE6DA8CFEBA780267 /* MediaPlayer */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		85036B47D85B2FB7D19511C9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6177F5CA7324233F4A627F06 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		06AFCC8CE274CE69349EA371 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3492F13AD4D5C67443C9C40D /* AVFoundationEngine.swift in Sources */,
+				28300FA54868772F3F4142B6 /* AppSettingsKeys.swift in Sources */,
+				473ED1DD6A872E34140EC692 /* ContentView.swift in Sources */,
+				482CE246061B16058BF33542 /* ControlButton.swift in Sources */,
+				0A7CDC85F8F2970340407C9A /* MPVEngine.swift in Sources */,
+				B793085401767FC229839086 /* MPVVideoView.swift in Sources */,
+				B157F7CEC7F4364ECBA5673D /* MediaInfoView.swift in Sources */,
+				4423EF3C9917EA43CD4F76AD /* MediaItem.swift in Sources */,
+				F476BF0B7B22D01E9AF397AB /* MediaPlayerApp.swift in Sources */,
+				AF7A2BC2FF1006F0A75FAFB7 /* MediaTrack.swift in Sources */,
+				FDC06B6D0DFBE4386F48A210 /* OpenNetworkStreamView.swift in Sources */,
+				3014C4F4567A9537C68E79F3 /* PlaybackControlsBar.swift in Sources */,
+				E72FBFE6C6ECA5CF58DEF2A5 /* PlaybackEngine.swift in Sources */,
+				BC8606EB700FC43C18A28BD8 /* PlaybackSpeedMenu.swift in Sources */,
+				C223A973C8E506B953813318 /* PlayerContainerView.swift in Sources */,
+				C0DE3A81280610DF512B8E66 /* PlayerViewModel.swift in Sources */,
+				A452D5FD2B04AC7BCD3E72C8 /* PlaylistSidebarView.swift in Sources */,
+				2B6BE2819183C8DB6B3D8AC1 /* ScrubberView.swift in Sources */,
+				495288AD875FBE33E30C6886 /* SettingsView.swift in Sources */,
+				A1F8F53C3E0FF83365F327B2 /* TimeFormatter.swift in Sources */,
+				DFAC0C09995A169B2D9CF50A /* TrackMenuButton.swift in Sources */,
+				C8FFC668CF6925C5BA0F244C /* VideoLayerView.swift in Sources */,
+				C728F9BC94FF20B4C14EBB48 /* VisualEffectView.swift in Sources */,
+				7575F225AF21D45D135248AE /* VolumeControl.swift in Sources */,
+				8005D408648083CD463C4B1B /* WindowAccessor.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		6310E7CE3B56304CB5940F20 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		CF7CF7D4129FF024A59DDA2A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Sources/MediaPlayer/Resources/MediaPlayer.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					/opt/homebrew/include,
+				);
+				INFOPLIST_FILE = Sources/MediaPlayer/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/mpv/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				OTHER_LDFLAGS = (
+					"-lmpv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.masonkimball.MediaPlayer;
+				PRODUCT_NAME = "Media Player";
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "Sources/MediaPlayer/Resources/MediaPlayer-Bridging-Header.h";
+			};
+			name = Debug;
+		};
+		D383506C7B8CC2399658EC68 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		E8E73698F8F31008996D2287 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Sources/MediaPlayer/Resources/MediaPlayer.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					/opt/homebrew/include,
+				);
+				INFOPLIST_FILE = Sources/MediaPlayer/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/mpv/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				OTHER_LDFLAGS = (
+					"-lmpv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.masonkimball.MediaPlayer;
+				PRODUCT_NAME = "Media Player";
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "Sources/MediaPlayer/Resources/MediaPlayer-Bridging-Header.h";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		85F3DD08D430862498D96B5C /* Build configuration list for PBXProject "MediaPlayer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6310E7CE3B56304CB5940F20 /* Debug */,
+				D383506C7B8CC2399658EC68 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		ACF49FF8DEA911A5E2B4BFA7 /* Build configuration list for PBXNativeTarget "MediaPlayer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CF7CF7D4129FF024A59DDA2A /* Debug */,
+				E8E73698F8F31008996D2287 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0E3BA5A907C184F0A04ADE39 /* Project object */;
+}

@@ -1,0 +1,74 @@
+name: MediaPlayer
+options:
+  bundleIdPrefix: com.masonkimball
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  MediaPlayer:
+    type: application
+    platform: macOS
+    # Homebrew's libmpv bottle is built requiring macOS 26+ (see README's MKV section) —
+    # claiming a lower deployment target here would be a lie the linker warns about.
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/MediaPlayer
+    resources:
+      - path: Sources/MediaPlayer/Resources/Assets.xcassets
+    info:
+      path: Sources/MediaPlayer/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Media Player
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "26.0"
+        NSHumanReadableCopyright: "Copyright © 2026 Mason Kimball."
+        LSApplicationCategoryType: public.app-category.video
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Video
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.movie
+              - public.mpeg-4
+              - com.apple.quicktime-movie
+          - CFBundleTypeName: Audio
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.audio
+              - public.mp3
+    entitlements:
+      path: Sources/MediaPlayer/Resources/MediaPlayer.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-only: true
+        com.apple.security.files.user-selected.read-write: true # NSSavePanel, for saving snapshots
+        com.apple.security.files.bookmarks.app-scope: true
+        com.apple.security.network.client: true # "Open Network Stream"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.masonkimball.MediaPlayer
+        PRODUCT_NAME: Media Player
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+        # libmpv (MKV/AVI/etc. playback engine) — installed via `brew install mpv`,
+        # see README.md. /opt/homebrew is the Apple Silicon Homebrew root; if this
+        # is ever built on an Intel Mac, add /usr/local/include and
+        # /usr/local/opt/mpv/lib here (an empty/nonexistent search path is itself
+        # an Xcode warning, which is why there's no speculative Intel entry today).
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/MediaPlayer/Resources/MediaPlayer-Bridging-Header.h
+        HEADER_SEARCH_PATHS: [/opt/homebrew/include]
+        LIBRARY_SEARCH_PATHS: [/opt/homebrew/opt/mpv/lib]
+        OTHER_LDFLAGS: [-lmpv]
