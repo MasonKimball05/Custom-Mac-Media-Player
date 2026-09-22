@@ -10,3 +10,13 @@ struct SavedPlaylist: Codable, Identifiable {
     var name: String
     var entries: [PersistedPlaylistEntry]
 }
+
+/// One entry in the File ▸ Open Recent menu. `urlString` is kept alongside the bookmark
+/// purely so we can dedupe/bump-to-top by comparing it cheaply — the bookmark (`entry`)
+/// is what's actually used to reopen the file.
+struct RecentFile: Codable, Identifiable {
+    let id: UUID
+    let title: String
+    let urlString: String
+    let entry: PersistedPlaylistEntry
+}

@@ -12,6 +12,7 @@ enum AppSettingsKeys {
     static let lastMuted = "lastMuted"
     static let persistedSession = "persistedSession"
     static let savedPlaylistsLibrary = "savedPlaylistsLibrary"
+    static let recentFiles = "recentFiles"
 }
 
 enum AppSettingsDefaults {

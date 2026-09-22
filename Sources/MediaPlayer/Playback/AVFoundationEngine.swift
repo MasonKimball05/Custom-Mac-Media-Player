@@ -78,6 +78,15 @@ final class AVFoundationEngine: PlaybackEngine {
         tracks(for: .legible, kind: .subtitle)
     }
 
+    func availableChapters() -> [Chapter] {
+        guard let asset = player.currentItem?.asset else { return [] }
+        let groups = asset.chapterMetadataGroups(withTitleLocale: Locale.current, containingItemsWithCommonKeys: [.commonKeyTitle])
+        return groups.map { group in
+            let title = group.items.first(where: { $0.commonKey == .commonKeyTitle })?.stringValue ?? "Chapter"
+            return Chapter(title: title, startTime: group.timeRange.start.seconds)
+        }
+    }
+
     func selectAudioTrack(id: String?) {
         selectTrack(id: id, characteristic: .audible, allowsOff: false)
     }
@@ -143,6 +152,23 @@ final class AVFoundationEngine: PlaybackEngine {
             throw PlaybackEngineError.snapshotEncodingFailed
         }
         try data.write(to: url)
+    }
+
+    func generateThumbnail(at seconds: Double) async -> CGImage? {
+        guard let asset = player.currentItem?.asset else { return nil }
+
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 240, height: 240)
+        // A loose tolerance lets the generator grab the nearest keyframe instead of
+        // decoding to the exact frame — the difference is invisible at this size, and
+        // it's the difference between a preview that feels instant and one that doesn't.
+        let tolerance = CMTime(seconds: 1, preferredTimescale: 600)
+        generator.requestedTimeToleranceBefore = tolerance
+        generator.requestedTimeToleranceAfter = tolerance
+
+        let time = CMTime(seconds: seconds, preferredTimescale: 600)
+        return try? await generator.image(at: time).image
     }
 
     func mediaInfo() async -> MediaInfo {

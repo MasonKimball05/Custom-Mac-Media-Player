@@ -1,7 +1,10 @@
 import SwiftUI
 
-/// Small name-entry sheet for "Save Playlist As…" — same shape as OpenNetworkStreamView.
+/// Small name-entry sheet, reused for both "Save Playlist As…" and "Rename Playlist".
 struct SavePlaylistNameView: View {
+    var title: String = "Save Playlist As"
+    var initialName: String = ""
+    var confirmTitle: String = "Save"
     let onSave: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -10,7 +13,7 @@ struct SavePlaylistNameView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Save Playlist As")
+            Text(title)
                 .font(.headline)
 
             TextField("Playlist name", text: $name)
@@ -22,14 +25,17 @@ struct SavePlaylistNameView: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("Save") { save() }
+                Button(confirmTitle) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(20)
         .frame(width: 320)
-        .onAppear { isFieldFocused = true }
+        .onAppear {
+            name = initialName
+            isFieldFocused = true
+        }
     }
 
     private func save() {

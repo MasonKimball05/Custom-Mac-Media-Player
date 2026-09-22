@@ -43,6 +43,9 @@ struct PlaybackControlsBar: View {
                     onScrubEnd: { time in
                         viewModel.seek(to: time)
                         viewModel.isScrubbing = false
+                    },
+                    thumbnailProvider: { time in
+                        await viewModel.generateThumbnail(at: time)
                     }
                 )
 
@@ -86,6 +89,12 @@ struct PlaybackControlsBar: View {
                         cycleRepeatMode()
                     }
                     TrackMenuButton(viewModel: viewModel)
+                    if !viewModel.usesMPVEngine {
+                        // AirPlay routes an AVPlayer specifically — mpv (MKV/AVI/etc.)
+                        // has no equivalent hook, so this only appears when it'd work.
+                        AirPlayButton(player: viewModel.player)
+                            .frame(width: 20, height: 20)
+                    }
                     PlaybackSpeedMenu(rate: $viewModel.playbackRate)
                     ControlButton(
                         systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",

@@ -9,6 +9,7 @@ struct PlaylistSidebarView: View {
 
     @State private var showingClearConfirmation = false
     @State private var showingSaveAsSheet = false
+    @State private var showingRenameSheet = false
     @State private var selection = Set<MediaItem.ID>()
 
     var body: some View {
@@ -41,6 +42,13 @@ struct PlaylistSidebarView: View {
                         showingSaveAsSheet = true
                     }
                     .disabled(viewModel.playlist.isEmpty)
+
+                    if let activeID = viewModel.activeSavedPlaylistID,
+                       viewModel.savedPlaylists.contains(where: { $0.id == activeID }) {
+                        Button("Rename\u{2026}") {
+                            showingRenameSheet = true
+                        }
+                    }
 
                     if let activeID = viewModel.activeSavedPlaylistID,
                        let active = viewModel.savedPlaylists.first(where: { $0.id == activeID }) {
@@ -184,6 +192,14 @@ struct PlaylistSidebarView: View {
         .sheet(isPresented: $showingSaveAsSheet) {
             SavePlaylistNameView { name in
                 viewModel.saveCurrentPlaylist(as: name)
+            }
+        }
+        .sheet(isPresented: $showingRenameSheet) {
+            if let activeID = viewModel.activeSavedPlaylistID,
+               let active = viewModel.savedPlaylists.first(where: { $0.id == activeID }) {
+                SavePlaylistNameView(title: "Rename Playlist", initialName: active.name, confirmTitle: "Rename") { newName in
+                    viewModel.renameSavedPlaylist(id: activeID, to: newName)
+                }
             }
         }
     }

@@ -10,10 +10,15 @@ struct ScrubberView: View {
     let onScrubStart: () -> Void
     let onScrub: (Double) -> Void
     let onScrubEnd: (Double) -> Void
+    /// Returns `nil` when the active engine doesn't support previews (mpv/MKV today) or
+    /// generation just failed — either way the tooltip quietly falls back to text-only.
+    let thumbnailProvider: (Double) async -> CGImage?
 
     @State private var hoverFraction: Double?
     @State private var isDragging = false
     @State private var dragFraction: Double = 0
+    @State private var previewImage: CGImage?
+    @State private var thumbnailTask: Task<Void, Never>?
 
     private let trackHeight: CGFloat = 4
     private let expandedTrackHeight: CGFloat = 6
@@ -48,18 +53,30 @@ struct ScrubberView: View {
                     .offset(x: (width * playedFraction) - thumbDiameter / 2)
                     .opacity(isHoveringOrDragging ? 1 : 0)
 
-                // Hover time preview
+                // Hover preview: a thumbnail when the engine can produce one, always with
+                // the timestamp underneath.
                 if let hoverFraction, !isDragging {
                     let previewTime = hoverFraction * duration
-                    Text(TimeFormatter.string(from: previewTime))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
-                        .foregroundStyle(.white)
-                        .offset(x: clampedTooltipOffset(fraction: hoverFraction, width: width), y: -26)
-                        .transition(.opacity)
+                    VStack(spacing: 4) {
+                        if let previewImage {
+                            Image(decorative: previewImage, scale: 1)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: previewWidth, height: previewHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        Text(TimeFormatter.string(from: previewTime))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    .padding(6)
+                    .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
+                    .foregroundStyle(.white)
+                    .offset(
+                        x: clampedTooltipOffset(fraction: hoverFraction, width: width),
+                        y: previewImage != nil ? -(previewHeight + 34) : -26
+                    )
+                    .transition(.opacity)
                 }
             }
             .frame(height: 20)
@@ -85,9 +102,13 @@ struct ScrubberView: View {
             .onContinuousHover { phase in
                 switch phase {
                 case .active(let location):
-                    hoverFraction = fraction(for: location.x, width: width)
+                    let fraction = fraction(for: location.x, width: width)
+                    hoverFraction = fraction
+                    scheduleThumbnailFetch(at: fraction * duration)
                 case .ended:
                     hoverFraction = nil
+                    previewImage = nil
+                    thumbnailTask?.cancel()
                 }
             }
         }
@@ -111,5 +132,21 @@ struct ScrubberView: View {
     private func clampedTooltipOffset(fraction: Double, width: CGFloat) -> CGFloat {
         let raw = width * fraction - 18
         return min(max(raw, 0), width - 36)
+    }
+
+    private let previewWidth: CGFloat = 120
+    private let previewHeight: CGFloat = 68
+
+    /// Debounced so dragging the cursor quickly across the whole bar doesn't fire off a
+    /// generation request per pixel — only once the cursor settles somewhere briefly.
+    private func scheduleThumbnailFetch(at time: Double) {
+        thumbnailTask?.cancel()
+        thumbnailTask = Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            let image = await thumbnailProvider(time)
+            guard !Task.isCancelled else { return }
+            previewImage = image
+        }
     }
 }

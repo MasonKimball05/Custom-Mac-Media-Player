@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Combine
+import MediaPlayer
 import SwiftUI
 
 /// Drives playback and exposes everything the custom UI needs as published state.
@@ -21,6 +22,9 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// auto-restores every launch on its own regardless of whether it's saved anywhere.
     @Published private(set) var savedPlaylists: [SavedPlaylist] = []
     @Published private(set) var activeSavedPlaylistID: UUID?
+
+    /// File ▸ Open Recent, most-recently-opened first, capped at 10.
+    @Published private(set) var recentFiles: [RecentFile] = []
 
     @Published private(set) var isPlaying = false
     @Published private(set) var currentTime: Double = 0
@@ -100,7 +104,9 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         isMuted = defaults.bool(forKey: AppSettingsKeys.lastMuted)
 
         loadSavedPlaylistsLibrary()
+        loadRecentFiles()
         restoreSession()
+        setUpNowPlayingCommands()
 
         // Best-effort final save on normal quit, on top of the throttled periodic save
         // in engineDidUpdateTime — catches whatever's happened in the last few seconds
@@ -126,6 +132,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         play(item: first)
         regenerateShuffleOrder()
         persistSession()
+        newItems.forEach(recordRecentFile)
     }
 
     /// Adds and immediately plays a direct stream URL (http/https/rtsp/etc.) rather than
@@ -142,6 +149,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         play(item: item)
         regenerateShuffleOrder()
         persistSession()
+        recordRecentFile(item)
     }
 
     func removeItem(_ item: MediaItem) {
@@ -158,6 +166,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             isPlaying = false
             currentTime = 0
             duration = 0
+            updateNowPlayingInfo()
         }
         persistSession()
     }
@@ -176,6 +185,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         currentTime = 0
         duration = 0
         persistSession()
+        updateNowPlayingInfo()
     }
 
     func play(item: MediaItem, resumeAt: Double = 0, autoPlay: Bool = true) {
@@ -203,6 +213,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         }
         isPlaying = autoPlay
         persistSession()
+        updateNowPlayingInfo()
     }
 
     func playNext() {
@@ -274,12 +285,14 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             activeEngine.play()
         }
         isPlaying.toggle()
+        updateNowPlayingInfo()
     }
 
     func seek(to seconds: Double) {
         let clamped = max(0, min(seconds, duration))
         activeEngine.seek(to: clamped)
         currentTime = clamped
+        updateNowPlayingInfo()
     }
 
     func skip(by seconds: Double) {
@@ -293,11 +306,14 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         currentTime = seconds
 
         // Throttled: this fires ~10x/sec, but "where you were" only needs second-ish
-        // granularity, and writing to UserDefaults that often would be wasteful.
+        // granularity, and writing to UserDefaults (or resyncing Control Center) that
+        // often would be wasteful — Control Center interpolates elapsed time on its own
+        // between updates anyway, based on the rate we last gave it.
         let now = Date()
         if now.timeIntervalSince(lastSessionSaveDate) > 5 {
             lastSessionSaveDate = now
             persistSession()
+            updateNowPlayingInfo()
         }
     }
 
@@ -306,6 +322,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         if let idx = playlist.firstIndex(where: { $0.id == currentItemID }) {
             playlist[idx].duration = seconds
         }
+        updateNowPlayingInfo()
     }
 
     func engineDidUpdateBufferedFraction(_ fraction: Double) {
@@ -348,6 +365,10 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
 
     func availableSubtitleTracks() -> [MediaTrack] {
         activeEngine.availableSubtitleTracks()
+    }
+
+    func availableChapters() -> [Chapter] {
+        activeEngine.availableChapters()
     }
 
     func selectAudioTrack(id: String?) {
@@ -413,6 +434,10 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     func fetchMediaInfo() async -> MediaInfo? {
         guard currentItem != nil else { return nil }
         return await activeEngine.mediaInfo()
+    }
+
+    func generateThumbnail(at seconds: Double) async -> CGImage? {
+        await activeEngine.generateThumbnail(at: seconds)
     }
 
     // MARK: Session persistence
@@ -549,6 +574,57 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         persistSavedPlaylistsLibrary()
     }
 
+    func renameSavedPlaylist(id: UUID, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = savedPlaylists.firstIndex(where: { $0.id == id }) else { return }
+        savedPlaylists[index].name = trimmed
+        persistSavedPlaylistsLibrary()
+    }
+
+    // MARK: Open Recent
+
+    private func loadRecentFiles() {
+        guard let data = UserDefaults.standard.data(forKey: AppSettingsKeys.recentFiles),
+              let decoded = try? JSONDecoder().decode([RecentFile].self, from: data) else { return }
+        recentFiles = decoded
+    }
+
+    private func persistRecentFiles() {
+        guard let data = try? JSONEncoder().encode(recentFiles) else { return }
+        UserDefaults.standard.set(data, forKey: AppSettingsKeys.recentFiles)
+    }
+
+    private func recordRecentFile(_ item: MediaItem) {
+        guard let entry = makeEntry(for: item) else { return }
+        recentFiles.removeAll { $0.urlString == item.url.absoluteString }
+        recentFiles.insert(RecentFile(id: UUID(), title: item.title, urlString: item.url.absoluteString, entry: entry), at: 0)
+        if recentFiles.count > 10 {
+            recentFiles.removeLast(recentFiles.count - 10)
+        }
+        persistRecentFiles()
+    }
+
+    /// Adds a recent file back onto the current queue and plays it — reopening it also
+    /// bumps it back to the top of the list, like every other app's Open Recent.
+    func openRecentFile(_ recent: RecentFile) {
+        guard let item = resolveEntry(recent.entry) else {
+            errorMessage = "\u{201C}\(recent.title)\u{201D} isn't available anymore — it may have moved or been deleted."
+            recentFiles.removeAll { $0.id == recent.id }
+            persistRecentFiles()
+            return
+        }
+        playlist.append(item)
+        play(item: item)
+        regenerateShuffleOrder()
+        persistSession()
+        recordRecentFile(item)
+    }
+
+    func clearRecentFiles() {
+        recentFiles.removeAll()
+        persistRecentFiles()
+    }
+
     /// Empties the queue without saving it anywhere first — for starting a fresh list.
     /// (To keep the current one, use "Save Playlist As…" before this.)
     func startNewPlaylist() {
@@ -619,5 +695,76 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             errorMessage = "Added \(newItems.count) item(s) — \(skippedCount) couldn't be added (moved, deleted, or not accessible to this app)."
         }
         persistSession()
+    }
+
+    // MARK: Now Playing / media keys
+
+    /// Registers with Control Center's Now Playing widget and the system's media-key
+    /// handling (keyboard media keys, AirPods double-tap, etc.) — makes this app a real
+    /// participant in macOS's shared playback controls instead of only responding to its
+    /// own on-screen buttons. Called once at init; the handlers below close over `self`
+    /// weakly and just delegate to the same methods the in-app UI already uses.
+    private func setUpNowPlayingCommands() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            guard let self, self.currentItem != nil else { return .noSuchContent }
+            if !self.isPlaying { self.togglePlayPause() }
+            return .success
+        }
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            guard let self, self.currentItem != nil else { return .noSuchContent }
+            if self.isPlaying { self.togglePlayPause() }
+            return .success
+        }
+        commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+            guard let self, self.currentItem != nil else { return .noSuchContent }
+            self.togglePlayPause()
+            return .success
+        }
+        commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+            self?.playNext()
+            return .success
+        }
+        commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+            self?.playPrevious()
+            return .success
+        }
+        commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let self, let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            self.seek(to: event.positionTime)
+            return .success
+        }
+        commandCenter.skipForwardCommand.preferredIntervals = [15]
+        commandCenter.skipForwardCommand.addTarget { [weak self] _ in
+            self?.skip(by: 15)
+            return .success
+        }
+        commandCenter.skipBackwardCommand.preferredIntervals = [15]
+        commandCenter.skipBackwardCommand.addTarget { [weak self] _ in
+            self?.skip(by: -15)
+            return .success
+        }
+    }
+
+    private func updateNowPlayingInfo() {
+        let center = MPNowPlayingInfoCenter.default()
+        guard let currentItem else {
+            center.nowPlayingInfo = nil
+            center.playbackState = .stopped
+            return
+        }
+
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: currentItem.title,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(playbackRate) : 0.0,
+            MPNowPlayingInfoPropertyMediaType: NSNumber(value: isVideoTrackPresent ? MPNowPlayingInfoMediaType.video.rawValue : MPNowPlayingInfoMediaType.audio.rawValue),
+        ]
+        if duration > 0 {
+            info[MPMediaItemPropertyPlaybackDuration] = duration
+        }
+        center.nowPlayingInfo = info
+        center.playbackState = isPlaying ? .playing : .paused
     }
 }

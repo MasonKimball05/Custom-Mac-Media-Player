@@ -32,6 +32,13 @@ struct EngineCapabilities {
     var subtitleScaling = false
 }
 
+/// One chapter marker, normalized across both engines.
+struct Chapter: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let startTime: Double
+}
+
 /// Snapshot of everything the Media Info panel (⌘I) shows.
 struct MediaInfo {
     var engineName: String

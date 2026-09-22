@@ -134,6 +134,17 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         tracks(ofMpvType: "sub", kind: .subtitle)
     }
 
+    func availableChapters() -> [Chapter] {
+        guard let count = getInt64Property("chapter-list/count") else { return [] }
+        var result: [Chapter] = []
+        for index in 0..<count {
+            guard let time = getRawDoubleProperty("chapter-list/\(index)/time") else { continue }
+            let title = getStringProperty("chapter-list/\(index)/title") ?? "Chapter \(index + 1)"
+            result.append(Chapter(title: title, startTime: time))
+        }
+        return result
+    }
+
     func selectAudioTrack(id: String?) {
         guard let handle else { return }
         mpv_set_property_string(handle, "aid", id ?? "auto")
@@ -206,6 +217,14 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         }
     }
 
+    /// Not implemented: generating a frame at an arbitrary time without disrupting the
+    /// live render context isn't something the single mpv instance we embed can do —
+    /// it would need a second, offscreen mpv instance seeking independently. Scrubber
+    /// hover just falls back to a text-only time tooltip for MKV/AVI/etc.
+    func generateThumbnail(at seconds: Double) async -> CGImage? {
+        nil
+    }
+
     func mediaInfo() async -> MediaInfo {
         var info = MediaInfo(engineName: "mpv")
         info.containerFormat = getStringProperty("file-format")?.uppercased()
@@ -235,10 +254,20 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         return String(cString: ptr)
     }
 
+    /// Treats 0 as "unavailable" — right for the media-info fields this backs (bitrate,
+    /// sample rate: 0 there really does mean unknown), wrong for anything where 0 is a
+    /// legitimate value (a chapter starting at time 0). Use `getRawDoubleProperty` for those.
     private func getDoubleProperty(_ name: String) -> Double? {
         guard let handle else { return nil }
         var value: Double = 0
         guard mpv_get_property(handle, name, MPV_FORMAT_DOUBLE, &value) >= 0, value != 0 else { return nil }
+        return value
+    }
+
+    private func getRawDoubleProperty(_ name: String) -> Double? {
+        guard let handle else { return nil }
+        var value: Double = 0
+        guard mpv_get_property(handle, name, MPV_FORMAT_DOUBLE, &value) >= 0 else { return nil }
         return value
     }
 

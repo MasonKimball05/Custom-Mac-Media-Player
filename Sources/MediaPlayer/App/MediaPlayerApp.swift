@@ -25,6 +25,23 @@ struct MediaPlayerApp: App {
                     NotificationCenter.default.post(name: .openNetworkStream, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Menu("Open Recent") {
+                    if viewModel.recentFiles.isEmpty {
+                        Text("No Recent Files")
+                    }
+                    ForEach(viewModel.recentFiles) { recent in
+                        Button(recent.title) {
+                            viewModel.openRecentFile(recent)
+                        }
+                    }
+                    if !viewModel.recentFiles.isEmpty {
+                        Divider()
+                        Button("Clear Menu") {
+                            viewModel.clearRecentFiles()
+                        }
+                    }
+                }
             }
 
             CommandGroup(after: .toolbar) {

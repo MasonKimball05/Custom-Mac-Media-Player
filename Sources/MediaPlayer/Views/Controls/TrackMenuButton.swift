@@ -12,6 +12,25 @@ struct TrackMenuButton: View {
 
     var body: some View {
         Menu {
+            let chapters = viewModel.availableChapters()
+            if !chapters.isEmpty {
+                Menu("Chapters") {
+                    ForEach(chapters) { chapter in
+                        Button {
+                            viewModel.seek(to: chapter.startTime)
+                        } label: {
+                            let label = "\(TimeFormatter.string(from: chapter.startTime))  \u{2014}  \(chapter.title)"
+                            if isCurrentChapter(chapter, in: chapters) {
+                                Label(label, systemImage: "checkmark")
+                            } else {
+                                Text(label)
+                            }
+                        }
+                    }
+                }
+                Divider()
+            }
+
             let audioTracks = viewModel.availableAudioTracks()
             if audioTracks.count > 1 {
                 Menu("Audio Track") {
@@ -78,6 +97,16 @@ struct TrackMenuButton: View {
         .fixedSize()
         .onHover { isHovering = $0 }
         .disabled(viewModel.currentItem == nil)
+    }
+
+    /// The chapter whose range contains the current playback time — chapters carry only
+    /// a start time, so "current" means the last one whose start is at or before now.
+    private func isCurrentChapter(_ chapter: Chapter, in chapters: [Chapter]) -> Bool {
+        let sorted = chapters.sorted { $0.startTime < $1.startTime }
+        guard let currentIndex = sorted.lastIndex(where: { $0.startTime <= viewModel.currentTime }) else {
+            return false
+        }
+        return sorted[currentIndex].id == chapter.id
     }
 
     @ViewBuilder

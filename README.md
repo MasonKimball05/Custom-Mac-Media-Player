@@ -18,6 +18,16 @@ external subtitle files, subtitle delay/size adjustment (mpv-backed files),
 frame-by-frame stepping (⌥⌘←/→), snapshot-to-PNG (⇧⌘S), a codec/bitrate
 Media Info panel (⌘I), and Open Network Stream (⇧⌘O) for direct URLs.
 
+And a round of "feels like a real Mac app" polish: Control Center/media-key
+integration (play/pause from the keyboard, AirPods, or the Now Playing
+widget — see `setUpNowPlayingCommands()`/`updateNowPlayingInfo()` in
+[PlayerViewModel.swift](Sources/MediaPlayer/ViewModels/PlayerViewModel.swift)),
+an AirPlay button (AVFoundation-backed files only — mpv has no equivalent
+hook), a chapters menu for files that have them, thumbnail previews on
+scrubber hover (also AVFoundation-only, for the same reason — see the
+`generateThumbnail` doc comment on `PlaybackEngine`), File ▸ Open Recent, and
+renaming saved playlists.
+
 The playlist and playback position are remembered across launches — quit
 mid-movie and reopening the app resumes right where you left off, paused.
 Local files are saved as security-scoped bookmarks (required for a sandboxed

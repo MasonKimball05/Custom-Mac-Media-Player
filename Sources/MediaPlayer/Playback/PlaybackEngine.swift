@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Which engine is driving playback right now. AVFoundation can't open MKV/AVI/etc.
@@ -72,9 +73,15 @@ protocol PlaybackEngine: AnyObject {
     func stepFrame(forward: Bool)
     func saveSnapshot(to url: URL) async throws
     func mediaInfo() async -> MediaInfo
+    /// A small, fast, low-fidelity frame for the scrubber's hover preview — not the same
+    /// as `saveSnapshot`, which is a deliberate full-quality capture. `nil` means "not
+    /// supported" (the mpv engine doesn't implement this) or "couldn't generate one",
+    /// and the caller just falls back to a text-only time tooltip either way.
+    func generateThumbnail(at seconds: Double) async -> CGImage?
 
     func availableAudioTracks() -> [MediaTrack]
     func availableSubtitleTracks() -> [MediaTrack]
+    func availableChapters() -> [Chapter]
     /// `nil` selects the engine's default/auto audio track.
     func selectAudioTrack(id: String?)
     /// `nil` turns subtitles off.
