@@ -7,13 +7,113 @@ struct PlaylistSidebarView: View {
     @ObservedObject var viewModel: PlayerViewModel
     let onOpenFile: () -> Void
 
+    @State private var showingClearConfirmation = false
+    @State private var showingSaveAsSheet = false
+    @State private var selection = Set<MediaItem.ID>()
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Playlist")
-                    .font(.system(size: 13, weight: .semibold))
+                Menu {
+                    Section("Saved Playlists") {
+                        if viewModel.savedPlaylists.isEmpty {
+                            Text("No saved playlists yet")
+                        }
+                        ForEach(viewModel.savedPlaylists) { saved in
+                            Button {
+                                viewModel.loadSavedPlaylist(id: saved.id)
+                            } label: {
+                                if saved.id == viewModel.activeSavedPlaylistID {
+                                    Label(saved.name, systemImage: "checkmark")
+                                } else {
+                                    Text(saved.name)
+                                }
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    Button("New Playlist") {
+                        viewModel.startNewPlaylist()
+                    }
+                    Button("Save Playlist As\u{2026}") {
+                        showingSaveAsSheet = true
+                    }
+                    .disabled(viewModel.playlist.isEmpty)
+
+                    if let activeID = viewModel.activeSavedPlaylistID,
+                       let active = viewModel.savedPlaylists.first(where: { $0.id == activeID }) {
+                        Button("Delete \u{201C}\(active.name)\u{201D}", role: .destructive) {
+                            viewModel.deleteSavedPlaylist(id: activeID)
+                        }
+                    }
+
+                    Divider()
+
+                    Button("Export to M3U\u{2026}") {
+                        exportPlaylist()
+                    }
+                    .disabled(viewModel.playlist.isEmpty)
+                    Button("Import M3U\u{2026}") {
+                        importPlaylist()
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(viewModel.activePlaylistDisplayName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
                     .foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+
                 Spacer()
+
+                Button {
+                    if selection.count == viewModel.playlist.count {
+                        selection.removeAll()
+                    } else {
+                        selection = Set(viewModel.playlist.map(\.id))
+                    }
+                } label: {
+                    Image(systemName: isAllSelected ? "checkmark.circle.fill" : "checkmark.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(isAllSelected ? "Deselect All" : "Select All")
+                .disabled(viewModel.playlist.isEmpty)
+
+                Button {
+                    if selection.isEmpty {
+                        showingClearConfirmation = true
+                    } else {
+                        viewModel.removeItems(selection)
+                        selection.removeAll()
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(selection.isEmpty ? "Clear Playlist" : "Remove \(selection.count) Selected")
+                .disabled(viewModel.playlist.isEmpty)
+                .confirmationDialog(
+                    "Clear the playlist?",
+                    isPresented: $showingClearConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Clear Playlist", role: .destructive) {
+                        viewModel.clearPlaylist()
+                    }
+                } message: {
+                    Text("This removes every item from the playlist and stops playback. It doesn't delete the actual files.")
+                }
+
                 Button(action: onOpenFile) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.secondary)
@@ -38,21 +138,18 @@ struct PlaylistSidebarView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                List {
+                // `selection:` is what makes single-click actually do something (select,
+                // with the usual Cmd-click-to-toggle / Shift-click-to-extend-range), and
+                // it's also what makes multi-item drag reordering work for free — dragging
+                // any selected row moves the whole selected block together.
+                List(selection: $selection) {
                     ForEach(viewModel.playlist) { item in
                         PlaylistRow(
                             item: item,
                             isCurrent: item.id == viewModel.currentItemID,
                             isPlaying: viewModel.isPlaying && item.id == viewModel.currentItemID
                         )
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            viewModel.play(item: item)
-                        }
-                        .contextMenu {
-                            Button("Play") { viewModel.play(item: item) }
-                            Button("Remove", role: .destructive) { viewModel.removeItem(item) }
-                        }
+                        .tag(item.id)
                     }
                     .onMove { source, destination in
                         viewModel.moveItems(fromOffsets: source, toOffset: destination)
@@ -60,10 +157,60 @@ struct PlaylistSidebarView: View {
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
+                .contextMenu(forSelectionType: MediaItem.ID.self) { selectedIDs in
+                    if selectedIDs.count > 1 {
+                        Button("Remove \(selectedIDs.count) Items", role: .destructive) {
+                            viewModel.removeItems(selectedIDs)
+                            selection.subtract(selectedIDs)
+                        }
+                    } else if let id = selectedIDs.first, let item = viewModel.playlist.first(where: { $0.id == id }) {
+                        Button("Play") { viewModel.play(item: item) }
+                        Button("Remove", role: .destructive) {
+                            viewModel.removeItems(selectedIDs)
+                            selection.subtract(selectedIDs)
+                        }
+                    }
+                } primaryAction: { selectedIDs in
+                    guard let id = selectedIDs.first, let item = viewModel.playlist.first(where: { $0.id == id }) else { return }
+                    viewModel.play(item: item)
+                }
+                .onDeleteCommand {
+                    viewModel.removeItems(selection)
+                    selection.removeAll()
+                }
             }
         }
-        .frame(minWidth: 220, idealWidth: 240)
         .background(.ultraThinMaterial)
+        .sheet(isPresented: $showingSaveAsSheet) {
+            SavePlaylistNameView { name in
+                viewModel.saveCurrentPlaylist(as: name)
+            }
+        }
+    }
+
+    private var isAllSelected: Bool {
+        !viewModel.playlist.isEmpty && selection.count == viewModel.playlist.count
+    }
+
+    private func exportPlaylist() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "m3u8")].compactMap { $0 }
+        panel.nameFieldStringValue = "\(viewModel.activePlaylistDisplayName).m3u8"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            viewModel.exportPlaylist(to: url)
+        }
+    }
+
+    private func importPlaylist() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = ["m3u8", "m3u"].compactMap { UTType(filenameExtension: $0) }
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            viewModel.importPlaylist(from: url)
+        }
     }
 }
 

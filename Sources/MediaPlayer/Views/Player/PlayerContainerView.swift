@@ -8,9 +8,11 @@ import UniformTypeIdentifiers
 struct PlayerContainerView: View {
     @ObservedObject var viewModel: PlayerViewModel
     @Binding var isFullscreen: Bool
+    /// Owned by ContentView so it can also hide the window toolbar (sidebar button)
+    /// in fullscreen when this goes false, not just our own overlay controls.
+    @Binding var controlsVisible: Bool
     let onToggleFullscreen: () -> Void
 
-    @State private var controlsVisible = true
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var isDropTargeted = false
 

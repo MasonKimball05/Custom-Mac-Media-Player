@@ -98,16 +98,19 @@ struct PlaybackControlsBar: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 14)
-        .background(
-            VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
-                .opacity(0.9)
-        )
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 1)
+        // The rounded-corner clip lives on the background layer only, not the whole
+        // bar, so the scrubber's hover time-preview tooltip (which pops up above the
+        // bar's own top edge) isn't cut off along with it.
+        .background {
+            ZStack(alignment: .top) {
+                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    .opacity(0.9)
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding(10)
     }
 }

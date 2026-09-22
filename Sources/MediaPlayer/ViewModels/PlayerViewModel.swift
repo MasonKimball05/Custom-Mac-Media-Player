@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import Combine
 import SwiftUI
@@ -14,6 +15,12 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
 
     @Published private(set) var playlist: [MediaItem] = []
     @Published private(set) var currentItemID: MediaItem.ID?
+
+    /// The library of named, user-saved playlists you can switch to — separate from
+    /// `playlist` above, which is just "whatever's in the queue right now" and
+    /// auto-restores every launch on its own regardless of whether it's saved anywhere.
+    @Published private(set) var savedPlaylists: [SavedPlaylist] = []
+    @Published private(set) var activeSavedPlaylistID: UUID?
 
     @Published private(set) var isPlaying = false
     @Published private(set) var currentTime: Double = 0
@@ -80,6 +87,8 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         activeEngineKind == .mpv ? mpvEngine : avEngine
     }
 
+    private var lastSessionSaveDate = Date.distantPast
+
     override init() {
         super.init()
         avEngine.delegate = self
@@ -89,6 +98,16 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             volume = defaults.float(forKey: AppSettingsKeys.lastVolume)
         }
         isMuted = defaults.bool(forKey: AppSettingsKeys.lastMuted)
+
+        loadSavedPlaylistsLibrary()
+        restoreSession()
+
+        // Best-effort final save on normal quit, on top of the throttled periodic save
+        // in engineDidUpdateTime — catches whatever's happened in the last few seconds
+        // before Cmd+Q. Won't fire on a crash/force-quit, same as any app's autosave.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.persistSession() }
     }
 
     // MARK: Playlist management
@@ -106,6 +125,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         playlist.append(contentsOf: newItems)
         play(item: first)
         regenerateShuffleOrder()
+        persistSession()
     }
 
     /// Adds and immediately plays a direct stream URL (http/https/rtsp/etc.) rather than
@@ -121,25 +141,44 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         playlist.append(item)
         play(item: item)
         regenerateShuffleOrder()
+        persistSession()
     }
 
     func removeItem(_ item: MediaItem) {
-        playlist.removeAll { $0.id == item.id }
-        shuffleOrder.removeAll { $0 == item.id }
-        if currentItemID == item.id {
+        removeItems([item.id])
+    }
+
+    func removeItems(_ ids: Set<MediaItem.ID>) {
+        guard !ids.isEmpty else { return }
+        playlist.removeAll { ids.contains($0.id) }
+        shuffleOrder.removeAll { ids.contains($0) }
+        if let currentItemID, ids.contains(currentItemID) {
             activeEngine.stop()
-            currentItemID = nil
+            self.currentItemID = nil
             isPlaying = false
             currentTime = 0
             duration = 0
         }
+        persistSession()
     }
 
     func moveItems(fromOffsets source: IndexSet, toOffset destination: Int) {
         playlist.move(fromOffsets: source, toOffset: destination)
+        persistSession()
     }
 
-    func play(item: MediaItem, resumeAt: Double = 0) {
+    func clearPlaylist() {
+        activeEngine.stop()
+        playlist.removeAll()
+        shuffleOrder.removeAll()
+        currentItemID = nil
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        persistSession()
+    }
+
+    func play(item: MediaItem, resumeAt: Double = 0, autoPlay: Bool = true) {
         errorMessage = nil
         isLoading = true
         currentItemID = item.id
@@ -157,8 +196,13 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         activeEngine.setVolume(volume, muted: isMuted)
         activeEngine.setRate(playbackRate)
         if resumeAt > 0 { activeEngine.seek(to: resumeAt) }
-        activeEngine.play()
-        isPlaying = true
+        if autoPlay {
+            activeEngine.play()
+        } else {
+            activeEngine.pause()
+        }
+        isPlaying = autoPlay
+        persistSession()
     }
 
     func playNext() {
@@ -247,6 +291,14 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     func engineDidUpdateTime(_ seconds: Double) {
         guard !isScrubbing else { return }
         currentTime = seconds
+
+        // Throttled: this fires ~10x/sec, but "where you were" only needs second-ish
+        // granularity, and writing to UserDefaults that often would be wasteful.
+        let now = Date()
+        if now.timeIntervalSince(lastSessionSaveDate) > 5 {
+            lastSessionSaveDate = now
+            persistSession()
+        }
     }
 
     func engineDidUpdateDuration(_ seconds: Double) {
@@ -361,5 +413,211 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     func fetchMediaInfo() async -> MediaInfo? {
         guard currentItem != nil else { return nil }
         return await activeEngine.mediaInfo()
+    }
+
+    // MARK: Session persistence
+
+    /// Saves the playlist (as security-scoped bookmarks, since a plain path/URL from a
+    /// past launch isn't actually accessible again in a sandboxed app) plus which item
+    /// was playing and how far into it. Cheap enough to call after every playlist edit
+    /// and on a throttle during playback — this is UserDefaults, not disk I/O of the media itself.
+    private func persistSession() {
+        let entries = playlist.compactMap(makeEntry(for:))
+        let currentIndex = playlist.firstIndex { $0.id == currentItemID }
+        let session = PersistedSession(
+            entries: entries, currentIndex: currentIndex, currentTime: currentTime,
+            activeSavedPlaylistID: activeSavedPlaylistID
+        )
+        guard let data = try? JSONEncoder().encode(session) else { return }
+        UserDefaults.standard.set(data, forKey: AppSettingsKeys.persistedSession)
+    }
+
+    /// Called once at launch. Resolves each saved bookmark (silently dropping any whose
+    /// file has since moved/been deleted — the rest still restore fine) and, if there
+    /// was something playing, loads it paused at the saved position rather than
+    /// surprising you with sound on launch.
+    private func restoreSession() {
+        guard let data = UserDefaults.standard.data(forKey: AppSettingsKeys.persistedSession),
+              let session = try? JSONDecoder().decode(PersistedSession.self, from: data) else { return }
+
+        var restoredItems: [MediaItem] = []
+        var resolvedCurrentIndex: Int?
+
+        for (originalIndex, entry) in session.entries.enumerated() {
+            guard let item = resolveEntry(entry) else { continue }
+            restoredItems.append(item)
+            if originalIndex == session.currentIndex {
+                resolvedCurrentIndex = restoredItems.count - 1
+            }
+        }
+
+        guard !restoredItems.isEmpty else { return }
+        playlist = restoredItems
+        regenerateShuffleOrder()
+        activeSavedPlaylistID = session.activeSavedPlaylistID
+
+        if let resolvedCurrentIndex, restoredItems.indices.contains(resolvedCurrentIndex) {
+            play(item: restoredItems[resolvedCurrentIndex], resumeAt: session.currentTime, autoPlay: false)
+        }
+    }
+
+    /// Builds a portable-ish entry for one playlist item: a security-scoped bookmark for
+    /// local files (the only thing that survives a relaunch under App Sandbox), or just
+    /// the URL string for network streams (which don't need sandbox access at all).
+    private func makeEntry(for item: MediaItem) -> PersistedPlaylistEntry? {
+        if item.url.isFileURL {
+            guard let bookmark = try? item.url.bookmarkData(
+                options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil
+            ) else { return nil }
+            return PersistedPlaylistEntry(bookmarkData: bookmark, remoteURLString: nil)
+        } else {
+            return PersistedPlaylistEntry(bookmarkData: nil, remoteURLString: item.url.absoluteString)
+        }
+    }
+
+    /// The inverse of `makeEntry(for:)` — resolves a bookmark (starting security-scoped
+    /// access) or parses a stored URL string back into a playable MediaItem.
+    private func resolveEntry(_ entry: PersistedPlaylistEntry) -> MediaItem? {
+        if let bookmarkData = entry.bookmarkData {
+            var isStale = false
+            guard let url = try? URL(
+                resolvingBookmarkData: bookmarkData, options: .withSecurityScope,
+                relativeTo: nil, bookmarkDataIsStale: &isStale
+            ), url.startAccessingSecurityScopedResource() else { return nil }
+            return MediaItem(url: url)
+        } else if let remoteURLString = entry.remoteURLString, let url = URL(string: remoteURLString) {
+            return MediaItem(url: url)
+        }
+        return nil
+    }
+
+    // MARK: Saved playlist library
+
+    /// The name shown in the sidebar header: the active saved playlist's name, or a
+    /// generic label when the current queue hasn't been saved under one.
+    var activePlaylistDisplayName: String {
+        guard let activeSavedPlaylistID,
+              let active = savedPlaylists.first(where: { $0.id == activeSavedPlaylistID }) else {
+            return "Playlist"
+        }
+        return active.name
+    }
+
+    private func loadSavedPlaylistsLibrary() {
+        guard let data = UserDefaults.standard.data(forKey: AppSettingsKeys.savedPlaylistsLibrary),
+              let decoded = try? JSONDecoder().decode([SavedPlaylist].self, from: data) else { return }
+        savedPlaylists = decoded
+    }
+
+    private func persistSavedPlaylistsLibrary() {
+        guard let data = try? JSONEncoder().encode(savedPlaylists) else { return }
+        UserDefaults.standard.set(data, forKey: AppSettingsKeys.savedPlaylistsLibrary)
+    }
+
+    /// Saves the current queue as a new named entry in the library. Doesn't touch what's
+    /// currently playing — this is a snapshot, not a move.
+    func saveCurrentPlaylist(as name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let entries = playlist.compactMap(makeEntry(for:))
+        let saved = SavedPlaylist(id: UUID(), name: trimmed, entries: entries)
+        savedPlaylists.append(saved)
+        activeSavedPlaylistID = saved.id
+        persistSavedPlaylistsLibrary()
+    }
+
+    /// Replaces the current queue with a saved playlist's contents, loaded (but not
+    /// playing) so you can look at what's there before picking something.
+    func loadSavedPlaylist(id: UUID) {
+        guard let saved = savedPlaylists.first(where: { $0.id == id }) else { return }
+        activeEngine.stop()
+        playlist = saved.entries.compactMap(resolveEntry)
+        shuffleOrder.removeAll()
+        currentItemID = nil
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        activeSavedPlaylistID = id
+        persistSession()
+    }
+
+    func deleteSavedPlaylist(id: UUID) {
+        savedPlaylists.removeAll { $0.id == id }
+        if activeSavedPlaylistID == id {
+            activeSavedPlaylistID = nil
+        }
+        persistSavedPlaylistsLibrary()
+    }
+
+    /// Empties the queue without saving it anywhere first — for starting a fresh list.
+    /// (To keep the current one, use "Save Playlist As…" before this.)
+    func startNewPlaylist() {
+        clearPlaylist()
+        activeSavedPlaylistID = nil
+    }
+
+    // MARK: M3U export/import
+
+    /// Writes the current queue as a standard M3U8 playlist — plain text, readable by
+    /// VLC/iTunes/etc., and the only real way to get a playlist OUT of this app (a saved
+    /// playlist in the library above only round-trips within this app, since it's built
+    /// on sandbox bookmarks that don't mean anything anywhere else).
+    func exportPlaylist(to url: URL) {
+        var lines = ["#EXTM3U"]
+        for item in playlist {
+            let durationSeconds = Int(item.duration ?? -1)
+            lines.append("#EXTINF:\(durationSeconds >= 0 ? durationSeconds : -1),\(item.title)")
+            lines.append(item.url.isFileURL ? item.url.path : item.url.absoluteString)
+        }
+        do {
+            try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            errorMessage = "Could not export the playlist: \(error.localizedDescription)"
+        }
+    }
+
+    /// Reads an M3U/M3U8 file and appends whatever it can actually still get to onto the
+    /// current queue. Entries whose file has moved, or that this sandboxed app was never
+    /// granted access to in the first place (a raw path from an M3U carries no access
+    /// grant the way a security-scoped bookmark does), are silently skipped rather than
+    /// failing the whole import — the count of skipped items is reported once at the end.
+    func importPlaylist(from url: URL) {
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else {
+            errorMessage = "Could not read that playlist file."
+            return
+        }
+        let baseDirectory = url.deletingLastPathComponent()
+
+        var newItems: [MediaItem] = []
+        var skippedCount = 0
+        for rawLine in content.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty, !line.hasPrefix("#") else { continue }
+
+            let itemURL: URL
+            if let parsed = URL(string: line), let scheme = parsed.scheme, scheme != "file" {
+                itemURL = parsed
+            } else if line.hasPrefix("/") {
+                itemURL = URL(fileURLWithPath: line)
+            } else {
+                itemURL = URL(fileURLWithPath: line, relativeTo: baseDirectory)
+            }
+
+            if itemURL.isFileURL, !FileManager.default.isReadableFile(atPath: itemURL.path) {
+                skippedCount += 1
+                continue
+            }
+            newItems.append(MediaItem(url: itemURL))
+        }
+
+        guard !newItems.isEmpty else {
+            errorMessage = "None of that playlist's files are accessible from here."
+            return
+        }
+        playlist.append(contentsOf: newItems)
+        if skippedCount > 0 {
+            errorMessage = "Added \(newItems.count) item(s) — \(skippedCount) couldn't be added (moved, deleted, or not accessible to this app)."
+        }
+        persistSession()
     }
 }

@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct PlaybackSpeedMenu: View {
+    /// Shared with the ⇧,/⇧. speed-step keyboard shortcuts in ContentView, so both stay in sync.
+    static let speeds: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+
     @Binding var rate: Float
-    private let speeds: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
     var body: some View {
         Menu {
-            ForEach(speeds, id: \.self) { speed in
+            ForEach(Self.speeds, id: \.self) { speed in
                 Button {
                     rate = speed
                 } label: {

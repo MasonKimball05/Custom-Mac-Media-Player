@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # macos-26 (arm64) — matches this project's MACOSX_DEPLOYMENT_TARGET (26.0, required
+    # by libmpv's Homebrew bottle) and the /opt/homebrew paths project.yml links against.
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install libmpv and XcodeGen
+        run: brew install mpv xcodegen
+
+      - name: Generate Xcode project from project.yml
+        run: xcodegen generate
+
+      - name: Build (Release, unsigned)
+        run: |
+          xcodebuild \
+            -project MediaPlayer.xcodeproj \
+            -scheme MediaPlayer \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload built app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Media-Player-${{ github.sha }}
+          path: build/Build/Products/Release/Media Player.app
+          if-no-files-found: error

@@ -10,6 +10,8 @@ enum AppSettingsKeys {
     static let hardwareDecodingEnabled = "hardwareDecodingEnabled"
     static let lastVolume = "lastVolume"
     static let lastMuted = "lastMuted"
+    static let persistedSession = "persistedSession"
+    static let savedPlaylistsLibrary = "savedPlaylistsLibrary"
 }
 
 enum AppSettingsDefaults {
