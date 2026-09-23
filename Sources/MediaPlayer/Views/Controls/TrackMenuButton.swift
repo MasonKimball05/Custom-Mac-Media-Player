@@ -3,24 +3,63 @@ import UniformTypeIdentifiers
 
 /// Audio-track and subtitle picker, tucked behind a single "captions" icon rather than
 /// eating permanent transport-bar space — this is where VLC puts its Audio/Subtitle menus.
+///
+/// Split in two: this wrapper observes the view model to compute a value-type snapshot of
+/// what the menu should show, and the menu itself is `.equatable()` on that snapshot, so
+/// an open menu is only rebuilt when what it displays actually changes. Nothing here
+/// reads the playback clock — see PlaybackClock for why that matters for open menus.
 struct TrackMenuButton: View {
     @ObservedObject var viewModel: PlayerViewModel
+
+    var body: some View {
+        TrackMenu(
+            viewModel: viewModel,
+            contents: TrackMenuContents(
+                chapters: viewModel.availableChapters(),
+                currentChapterID: viewModel.currentChapterID,
+                audioTracks: viewModel.availableAudioTracks(),
+                subtitleTracks: viewModel.availableSubtitleTracks(),
+                capabilities: viewModel.currentEngineCapabilities,
+                isEnabled: viewModel.currentItem != nil
+            )
+        )
+        .equatable()
+    }
+}
+
+private struct TrackMenuContents: Equatable {
+    let chapters: [Chapter]
+    let currentChapterID: Chapter.ID?
+    let audioTracks: [MediaTrack]
+    let subtitleTracks: [MediaTrack]
+    let capabilities: EngineCapabilities
+    let isEnabled: Bool
+}
+
+private struct TrackMenu: View, Equatable {
+    /// Deliberately not observed — only used to send actions. Everything the menu
+    /// displays comes from `contents`, which is what equality is judged on.
+    let viewModel: PlayerViewModel
+    let contents: TrackMenuContents
 
     @State private var isHovering = false
     @State private var subtitleDelay: Double = 0
     @State private var subtitleScale: Double = 1
 
+    nonisolated static func == (lhs: TrackMenu, rhs: TrackMenu) -> Bool {
+        lhs.contents == rhs.contents
+    }
+
     var body: some View {
         Menu {
-            let chapters = viewModel.availableChapters()
-            if !chapters.isEmpty {
+            if !contents.chapters.isEmpty {
                 Menu("Chapters") {
-                    ForEach(chapters) { chapter in
+                    ForEach(contents.chapters) { chapter in
                         Button {
                             viewModel.seek(to: chapter.startTime)
                         } label: {
                             let label = "\(TimeFormatter.string(from: chapter.startTime))  \u{2014}  \(chapter.title)"
-                            if isCurrentChapter(chapter, in: chapters) {
+                            if chapter.id == contents.currentChapterID {
                                 Label(label, systemImage: "checkmark")
                             } else {
                                 Text(label)
@@ -31,10 +70,9 @@ struct TrackMenuButton: View {
                 Divider()
             }
 
-            let audioTracks = viewModel.availableAudioTracks()
-            if audioTracks.count > 1 {
+            if contents.audioTracks.count > 1 {
                 Menu("Audio Track") {
-                    ForEach(audioTracks) { track in
+                    ForEach(contents.audioTracks) { track in
                         Button {
                             viewModel.selectAudioTrack(id: track.id)
                         } label: {
@@ -44,21 +82,20 @@ struct TrackMenuButton: View {
                 }
             }
 
-            let subtitleTracks = viewModel.availableSubtitleTracks()
             Menu("Subtitles") {
                 Button {
                     viewModel.selectSubtitleTrack(id: nil)
                 } label: {
-                    if subtitleTracks.contains(where: \.isSelected) {
+                    if contents.subtitleTracks.contains(where: \.isSelected) {
                         Text("Off")
                     } else {
                         Label("Off", systemImage: "checkmark")
                     }
                 }
 
-                if !subtitleTracks.isEmpty {
+                if !contents.subtitleTracks.isEmpty {
                     Divider()
-                    ForEach(subtitleTracks) { track in
+                    ForEach(contents.subtitleTracks) { track in
                         Button {
                             viewModel.selectSubtitleTrack(id: track.id)
                         } label: {
@@ -72,13 +109,13 @@ struct TrackMenuButton: View {
                     openSubtitlePanel()
                 }
 
-                if viewModel.currentEngineCapabilities.subtitleTiming || viewModel.currentEngineCapabilities.subtitleScaling {
+                if contents.capabilities.subtitleTiming || contents.capabilities.subtitleScaling {
                     Divider()
-                    if viewModel.currentEngineCapabilities.subtitleTiming {
+                    if contents.capabilities.subtitleTiming {
                         Button("Delay Subtitles +0.5s") { adjustDelay(by: 0.5) }
                         Button("Advance Subtitles \u{2212}0.5s") { adjustDelay(by: -0.5) }
                     }
-                    if viewModel.currentEngineCapabilities.subtitleScaling {
+                    if contents.capabilities.subtitleScaling {
                         Button("Larger Subtitle Text") { adjustScale(by: 0.1) }
                         Button("Smaller Subtitle Text") { adjustScale(by: -0.1) }
                     }
@@ -96,17 +133,7 @@ struct TrackMenuButton: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .onHover { isHovering = $0 }
-        .disabled(viewModel.currentItem == nil)
-    }
-
-    /// The chapter whose range contains the current playback time — chapters carry only
-    /// a start time, so "current" means the last one whose start is at or before now.
-    private func isCurrentChapter(_ chapter: Chapter, in chapters: [Chapter]) -> Bool {
-        let sorted = chapters.sorted { $0.startTime < $1.startTime }
-        guard let currentIndex = sorted.lastIndex(where: { $0.startTime <= viewModel.currentTime }) else {
-            return false
-        }
-        return sorted[currentIndex].id == chapter.id
+        .disabled(!contents.isEnabled)
     }
 
     @ViewBuilder

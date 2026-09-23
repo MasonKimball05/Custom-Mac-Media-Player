@@ -41,12 +41,76 @@ targets:
               - public.movie
               - public.mpeg-4
               - com.apple.quicktime-movie
+              # mpv-backed formats (see MediaFormat.mpvOnlyExtensions in PlaybackEngine.swift)
+              # — the app can already play these, but without claiming a UTI for them
+              # Finder's Open With menu and double-click never offer it as an option.
+              - com.masonkimball.mediaplayer.mkv
+              - com.masonkimball.mediaplayer.webm
+              - com.masonkimball.mediaplayer.avi
+              - com.masonkimball.mediaplayer.flv
+              - com.masonkimball.mediaplayer.wmv
+              - com.masonkimball.mediaplayer.ts
+              - com.masonkimball.mediaplayer.vob
+              - com.masonkimball.mediaplayer.ogv
+              - com.masonkimball.mediaplayer.rm
+              - com.masonkimball.mediaplayer.asf
           - CFBundleTypeName: Audio
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes:
               - public.audio
               - public.mp3
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.mkv
+            UTTypeDescription: Matroska Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [mkv]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.webm
+            UTTypeDescription: WebM Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [webm]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.avi
+            UTTypeDescription: AVI Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [avi]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.flv
+            UTTypeDescription: Flash Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [flv]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.wmv
+            UTTypeDescription: Windows Media Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [wmv]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.ts
+            UTTypeDescription: MPEG Transport Stream Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [ts, m2ts, mts]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.vob
+            UTTypeDescription: DVD Video Object
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [vob]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.ogv
+            UTTypeDescription: Ogg Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [ogv]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.rm
+            UTTypeDescription: RealMedia Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [rm, rmvb]
+          - UTTypeIdentifier: com.masonkimball.mediaplayer.asf
+            UTTypeDescription: Advanced Systems Format Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [asf]
     entitlements:
       path: Sources/MediaPlayer/Resources/MediaPlayer.entitlements
       properties:
@@ -55,6 +119,11 @@ targets:
         com.apple.security.files.user-selected.read-write: true # NSSavePanel, for saving snapshots
         com.apple.security.files.bookmarks.app-scope: true
         com.apple.security.network.client: true # "Open Network Stream"
+        # Hardened Runtime's Library Validation (on by default) requires every loaded
+        # dylib to share the app's own Team ID — but libmpv.2.dylib is Homebrew's build,
+        # signed under Homebrew's own identity, not ours. Without this, launching the app
+        # fails at the dyld step with "different Team IDs" for that exact library.
+        com.apple.security.cs.disable-library-validation: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.masonkimball.MediaPlayer
@@ -72,3 +141,9 @@ targets:
         HEADER_SEARCH_PATHS: [/opt/homebrew/include]
         LIBRARY_SEARCH_PATHS: [/opt/homebrew/opt/mpv/lib]
         OTHER_LDFLAGS: [-lmpv]
+        # mpv's render API only has an OpenGL backend on macOS (no Metal backend
+        # exists to switch to), so MPVVideoView.swift is stuck using the deprecated
+        # NSOpenGLView/NSOpenGLPixelFormat APIs deliberately. -Xcc forwards the C
+        # macro AppKit's own headers check for to Swift's Clang importer, silencing
+        # just that deprecation rather than deprecation warnings in general.
+        OTHER_SWIFT_FLAGS: [-Xcc, -DGL_SILENCE_DEPRECATION]

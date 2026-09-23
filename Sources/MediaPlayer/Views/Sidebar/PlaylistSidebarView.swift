@@ -5,12 +5,18 @@ import UniformTypeIdentifiers
 /// a live equalizer glyph rather than just a highlighted row.
 struct PlaylistSidebarView: View {
     @ObservedObject var viewModel: PlayerViewModel
+    /// Closing this on any play action from here isn't conditional on anything actually
+    /// changing in the player — clicking a playlist row unconditionally means "show me the
+    /// player," independent of whether the click also happened to change `isPlaying` or
+    /// `currentItemID` (clicking the already-playing item changes neither).
+    @Binding var showingHomeScreen: Bool
     let onOpenFile: () -> Void
 
     @State private var showingClearConfirmation = false
     @State private var showingSaveAsSheet = false
     @State private var showingRenameSheet = false
     @State private var selection = Set<MediaItem.ID>()
+    @State private var searchText = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -83,10 +89,12 @@ struct PlaylistSidebarView: View {
                 Spacer()
 
                 Button {
-                    if selection.count == viewModel.playlist.count {
-                        selection.removeAll()
+                    // Toggles just the currently-visible (filtered) rows, leaving any
+                    // selection outside the filter untouched.
+                    if isAllSelected {
+                        selection.subtract(filteredPlaylist.map(\.id))
                     } else {
-                        selection = Set(viewModel.playlist.map(\.id))
+                        selection.formUnion(filteredPlaylist.map(\.id))
                     }
                 } label: {
                     Image(systemName: isAllSelected ? "checkmark.circle.fill" : "checkmark.circle")
@@ -94,7 +102,7 @@ struct PlaylistSidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .help(isAllSelected ? "Deselect All" : "Select All")
-                .disabled(viewModel.playlist.isEmpty)
+                .disabled(filteredPlaylist.isEmpty)
 
                 Button {
                     if selection.isEmpty {
@@ -133,6 +141,32 @@ struct PlaylistSidebarView: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
 
+            if !viewModel.playlist.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                    TextField("Filter", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+            }
+
             if viewModel.playlist.isEmpty {
                 VStack(spacing: 8) {
                     Spacer()
@@ -145,19 +179,31 @@ struct PlaylistSidebarView: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
+            } else if filteredPlaylist.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Text("No matches for \u{201C}\(searchText)\u{201D}")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
             } else {
                 // `selection:` is what makes single-click actually do something (select,
                 // with the usual Cmd-click-to-toggle / Shift-click-to-extend-range), and
                 // it's also what makes multi-item drag reordering work for free — dragging
-                // any selected row moves the whole selected block together.
+                // any selected row moves the whole selected block together. Reordering is
+                // disabled while filtered, since drag offsets are only meaningful against
+                // the filtered list's own indices, not the underlying playlist's.
                 List(selection: $selection) {
-                    ForEach(viewModel.playlist) { item in
+                    ForEach(filteredPlaylist) { item in
                         PlaylistRow(
                             item: item,
                             isCurrent: item.id == viewModel.currentItemID,
                             isPlaying: viewModel.isPlaying && item.id == viewModel.currentItemID
                         )
                         .tag(item.id)
+                        .moveDisabled(!searchText.isEmpty)
                     }
                     .onMove { source, destination in
                         viewModel.moveItems(fromOffsets: source, toOffset: destination)
@@ -172,15 +218,22 @@ struct PlaylistSidebarView: View {
                             selection.subtract(selectedIDs)
                         }
                     } else if let id = selectedIDs.first, let item = viewModel.playlist.first(where: { $0.id == id }) {
-                        Button("Play") { viewModel.play(item: item) }
+                        Button("Play") {
+                            viewModel.play(item: item)
+                            showingHomeScreen = false
+                        }
                         Button("Remove", role: .destructive) {
                             viewModel.removeItems(selectedIDs)
                             selection.subtract(selectedIDs)
                         }
                     }
                 } primaryAction: { selectedIDs in
+                    // Look up by id against the full playlist, not filteredPlaylist — the
+                    // selection can include a row that's no longer visible if it stayed
+                    // selected across a filter change.
                     guard let id = selectedIDs.first, let item = viewModel.playlist.first(where: { $0.id == id }) else { return }
                     viewModel.play(item: item)
+                    showingHomeScreen = false
                 }
                 .onDeleteCommand {
                     viewModel.removeItems(selection)
@@ -205,7 +258,12 @@ struct PlaylistSidebarView: View {
     }
 
     private var isAllSelected: Bool {
-        !viewModel.playlist.isEmpty && selection.count == viewModel.playlist.count
+        !filteredPlaylist.isEmpty && filteredPlaylist.allSatisfy { selection.contains($0.id) }
+    }
+
+    private var filteredPlaylist: [MediaItem] {
+        guard !searchText.isEmpty else { return viewModel.playlist }
+        return viewModel.playlist.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
     }
 
     private func exportPlaylist() {

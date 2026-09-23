@@ -13,6 +13,22 @@ enum AppSettingsKeys {
     static let persistedSession = "persistedSession"
     static let savedPlaylistsLibrary = "savedPlaylistsLibrary"
     static let recentFiles = "recentFiles"
+    static let floatOnTop = "floatOnTop"
+    static let volumeBoostEnabled = "volumeBoostEnabled"
+    static let videoBrightness = "videoBrightness"
+    static let videoContrast = "videoContrast"
+    static let videoSaturation = "videoSaturation"
+    static let videoGamma = "videoGamma"
+    static let subtitleFontName = "subtitleFontName"
+    static let subtitleTextColorHex = "subtitleTextColorHex"
+    static let subtitleBackgroundColorHex = "subtitleBackgroundColorHex"
+    static let subtitleBackgroundOpacity = "subtitleBackgroundOpacity"
+    static let subtitleCodepage = "subtitleCodepage"
+    static let customKeyBindings = "customKeyBindings"
+    static let perFileResumePositions = "perFileResumePositions"
+    static let autoDoNotDisturb = "autoDoNotDisturb"
+    static let focusOnShortcutName = "focusOnShortcutName"
+    static let focusOffShortcutName = "focusOffShortcutName"
 }
 
 enum AppSettingsDefaults {
@@ -21,4 +37,18 @@ enum AppSettingsDefaults {
     static let autoAdvancePlaylist = true
     static let hardwareDecodingEnabled = true
     static let volume: Float = 0.8
+    static let floatOnTop = false
+    static let volumeBoostEnabled = false
+    /// mpv-style -100...100 range for all four; 0 is "no adjustment" on every axis.
+    static let videoAdjustment: Double = 0
+    static let subtitleFontName = ""
+    static let subtitleTextColorHex = "#FFFFFF"
+    static let subtitleBackgroundColorHex = "#000000"
+    static let subtitleBackgroundOpacity: Double = 0
+    /// Empty means "auto-detect" — mpv's own charset guesser, which is what gets a
+    /// legacy-encoded (non-UTF-8) subtitle file wrong often enough to need an override.
+    static let subtitleCodepage = ""
+    static let autoDoNotDisturb = false
+    static let focusOnShortcutName = "Focus On"
+    static let focusOffShortcutName = "Focus Off"
 }

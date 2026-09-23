@@ -29,8 +29,20 @@ enum MediaFormat {
         "mkv", "webm", "avi", "flv", "wmv", "ts", "m2ts", "mts", "vob", "ogv", "rm", "rmvb", "asf"
     ]
 
+    /// Formats AVFoundation opens natively. Only used alongside `mpvOnlyExtensions` to
+    /// recognize playable files while scanning a folder (Open Folder) — NSOpenPanel's own
+    /// UTI-based filtering handles the single-file picker case and doesn't need this list.
+    private static let avFoundationExtensions: Set<String> = [
+        "mp4", "m4v", "mov", "mp3", "m4a", "wav", "aiff", "aif", "flac", "3gp", "3g2"
+    ]
+
     static func requiredEngine(for url: URL) -> PlaybackEngineKind {
         mpvOnlyExtensions.contains(url.pathExtension.lowercased()) ? .mpv : .avFoundation
+    }
+
+    static func isSupportedFile(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return mpvOnlyExtensions.contains(ext) || avFoundationExtensions.contains(ext)
     }
 }
 
@@ -92,4 +104,16 @@ protocol PlaybackEngine: AnyObject {
     func setSubtitleDelay(_ seconds: Double)
     /// Only meaningful when `capabilities.subtitleScaling` is true.
     func setSubtitleScale(_ scale: Double)
+
+    /// Color-adjusts the decoded video. Each axis is -100...100, mpv's own convention,
+    /// with 0 meaning "no change" on all four — both engines support this one.
+    func setVideoAdjustments(brightness: Double, contrast: Double, saturation: Double, gamma: Double)
+
+    /// Only meaningful when `capabilities.subtitleAppearance` is true. `fontName` empty
+    /// means "engine default". Colors are "#RRGGBB". `codepage` empty means "auto-detect
+    /// the subtitle file's character encoding" — set explicitly to fix a legacy-encoded
+    /// (non-UTF-8) file the auto-detector guessed wrong on, e.g. "cp1253" for Greek.
+    func setSubtitleAppearance(
+        fontName: String, textColorHex: String, backgroundColorHex: String, backgroundOpacity: Double, codepage: String
+    )
 }

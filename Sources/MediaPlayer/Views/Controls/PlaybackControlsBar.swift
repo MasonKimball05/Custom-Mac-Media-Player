@@ -27,34 +27,7 @@ struct PlaybackControlsBar: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Text(TimeFormatter.string(from: viewModel.currentTime))
-                    .font(.system(size: 11, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.75))
-                    .frame(width: 44, alignment: .trailing)
-
-                ScrubberView(
-                    currentTime: viewModel.currentTime,
-                    duration: viewModel.duration,
-                    bufferedFraction: viewModel.bufferedFraction,
-                    onScrubStart: { viewModel.isScrubbing = true },
-                    onScrub: { viewModel.seek(to: $0) },
-                    onScrubEnd: { time in
-                        viewModel.seek(to: time)
-                        viewModel.isScrubbing = false
-                    },
-                    thumbnailProvider: { time in
-                        await viewModel.generateThumbnail(at: time)
-                    }
-                )
-
-                Text(TimeFormatter.string(from: viewModel.duration))
-                    .font(.system(size: 11, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.75))
-                    .frame(width: 44, alignment: .leading)
-            }
+            TimelineRow(clock: viewModel.clock, viewModel: viewModel, duration: viewModel.duration)
 
             HStack(spacing: 14) {
                 HStack(spacing: 4) {
@@ -88,8 +61,11 @@ struct PlaybackControlsBar: View {
                     ControlButton(systemName: repeatIconName, size: 13, isActive: viewModel.repeatMode != .off) {
                         cycleRepeatMode()
                     }
+                    ABLoopButton(viewModel: viewModel)
+                        .disabled(viewModel.currentItem == nil)
                     TrackMenuButton(viewModel: viewModel)
-                    if !viewModel.usesMPVEngine {
+                    AdjustmentsButton(viewModel: viewModel)
+                    if viewModel.currentEngineCapabilities.airPlay {
                         // AirPlay routes an AVPlayer specifically — mpv (MKV/AVI/etc.)
                         // has no equivalent hook, so this only appears when it'd work.
                         AirPlayButton(player: viewModel.player)
@@ -121,5 +97,46 @@ struct PlaybackControlsBar: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .padding(10)
+    }
+}
+
+/// The one part of the bar that changes every playback tick. It observes the clock
+/// directly, so each tick redraws only this row — not the rest of the bar, and in
+/// particular not the captions/speed menus next to it.
+private struct TimelineRow: View {
+    @ObservedObject var clock: PlaybackClock
+    /// Not observed — only used to send scrub actions.
+    let viewModel: PlayerViewModel
+    let duration: Double
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(TimeFormatter.string(from: clock.currentTime))
+                .font(.system(size: 11, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(width: 44, alignment: .trailing)
+
+            ScrubberView(
+                currentTime: clock.currentTime,
+                duration: duration,
+                bufferedFraction: clock.bufferedFraction,
+                onScrubStart: { viewModel.isScrubbing = true },
+                onScrub: { viewModel.seek(to: $0) },
+                onScrubEnd: { time in
+                    viewModel.seek(to: time)
+                    viewModel.isScrubbing = false
+                },
+                thumbnailProvider: { time in
+                    await viewModel.generateThumbnail(at: time)
+                }
+            )
+
+            Text(TimeFormatter.string(from: duration))
+                .font(.system(size: 11, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(width: 44, alignment: .leading)
+        }
     }
 }

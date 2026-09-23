@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Combine
+import CoreImage
 
 /// Wraps AVPlayer for every format AVFoundation can natively demux (mp4, mov, m4v,
 /// mp3, m4a, wav, aiff, flac...). This is the original playback path, now behind the
@@ -12,9 +13,16 @@ final class AVFoundationEngine: PlaybackEngine {
     /// No external subtitle loading (AVFoundation has no real support for compositing an
     /// external .srt onto an arbitrary asset) and no delay/scale controls — those aren't
     /// AVFoundation concepts. PlayerViewModel routes those actions through mpv instead.
-    let capabilities = EngineCapabilities()
+    /// AirPlay is the one thing this engine has that mpv doesn't.
+    let capabilities = EngineCapabilities(airPlay: true)
 
     let player = AVPlayer()
+
+    /// What `setRate(_:)` was last asked for, reapplied after every `play()` — AVPlayer
+    /// resets `rate` to 1.0 as a side effect of `play()`, and `setRate` itself is a no-op
+    /// while paused (setting a nonzero rate on a paused player starts it playing), so the
+    /// only reliable place to land the requested rate is right after `play()` actually runs.
+    private var desiredRate: Float = 1.0
 
     private var timeObserverToken: Any?
     private var itemStatusObservation: AnyCancellable?
@@ -25,6 +33,7 @@ final class AVFoundationEngine: PlaybackEngine {
         addPeriodicTimeObserver()
         endObserver = NotificationCenter.default
             .publisher(for: .AVPlayerItemDidPlayToEndTime)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.delegate?.engineDidReachEndOfMedia() }
     }
 
@@ -37,11 +46,18 @@ final class AVFoundationEngine: PlaybackEngine {
     func load(url: URL) {
         let playerItem = AVPlayerItem(url: url)
         observe(playerItem: playerItem)
+        // Adjustments carry across items once touched (same as volume/rate), so a new
+        // item needs the composition too if any axis is non-default — not attached
+        // unconditionally, since the custom-compositor path isn't free even at 0 change.
+        if hasVideoAdjustments {
+            attachVideoComposition(to: playerItem)
+        }
         player.replaceCurrentItem(with: playerItem)
     }
 
     func play() {
         player.play()
+        player.rate = desiredRate
     }
 
     func pause() {
@@ -58,6 +74,7 @@ final class AVFoundationEngine: PlaybackEngine {
     }
 
     func setRate(_ rate: Float) {
+        desiredRate = rate
         if player.timeControlStatus != .paused {
             player.rate = rate
         }
@@ -104,6 +121,77 @@ final class AVFoundationEngine: PlaybackEngine {
     }
 
     func setSubtitleScale(_ scale: Double) {
+        // Unsupported — see `capabilities`.
+    }
+
+    // MARK: Video adjustments
+
+    /// Read live, every frame, by the CIFilter chain in `attachVideoComposition` — so
+    /// changing these needs no composition rebuild, just an ivar write. `nonisolated(unsafe)`
+    /// for the same reason MPVEngine's `handle` is: the filter handler below runs on
+    /// AVFoundation's own rendering thread, off the main actor, by design — hopping back
+    /// to main per frame for four Doubles isn't worth what it'd cost on the render path.
+    nonisolated(unsafe) private var videoBrightness: Double = 0
+    nonisolated(unsafe) private var videoContrast: Double = 0
+    nonisolated(unsafe) private var videoSaturation: Double = 0
+    nonisolated(unsafe) private var videoGamma: Double = 0
+
+    private var hasVideoAdjustments: Bool {
+        videoBrightness != 0 || videoContrast != 0 || videoSaturation != 0 || videoGamma != 0
+    }
+
+    func setVideoAdjustments(brightness: Double, contrast: Double, saturation: Double, gamma: Double) {
+        videoBrightness = brightness
+        videoContrast = contrast
+        videoSaturation = saturation
+        videoGamma = gamma
+        if hasVideoAdjustments, let currentItem = player.currentItem, currentItem.videoComposition == nil {
+            attachVideoComposition(to: currentItem)
+        }
+    }
+
+    /// CIColorControls covers brightness/contrast/saturation; gamma isn't one of its
+    /// inputs, so a second CIGammaAdjust pass handles that axis. mpv's -100...100 range is
+    /// followed here too, mapped onto each filter's own native range.
+    ///
+    /// The synchronous `AVMutableVideoComposition(asset:applyingCIFiltersWithHandler:)`
+    /// initializer is deprecated as of macOS 15 in favor of this async factory — the
+    /// filter handler itself still runs synchronously per-frame either way, only
+    /// building the composition object up front becomes a completion-handler callback.
+    /// The whole `AVMutableVideoComposition` class is itself further deprecated as of
+    /// macOS 26 in favor of a new `AVVideoComposition.Configuration` API with no
+    /// established usage patterns yet at time of writing — not worth chasing for one
+    /// warning until it's had a macOS release or two to mature.
+    private func attachVideoComposition(to playerItem: AVPlayerItem) {
+        AVMutableVideoComposition.videoComposition(with: playerItem.asset, applyingCIFiltersWithHandler: { [weak self] request in
+            guard let self else {
+                request.finish(with: request.sourceImage, context: nil)
+                return
+            }
+            var image = request.sourceImage
+            if self.videoBrightness != 0 || self.videoContrast != 0 || self.videoSaturation != 0 {
+                image = image.applyingFilter("CIColorControls", parameters: [
+                    kCIInputBrightnessKey: self.videoBrightness / 100,
+                    kCIInputContrastKey: 1.0 + self.videoContrast / 100,
+                    kCIInputSaturationKey: 1.0 + self.videoSaturation / 100
+                ])
+            }
+            if self.videoGamma != 0 {
+                let power = max(0.1, 1.0 - self.videoGamma / 100)
+                image = image.applyingFilter("CIGammaAdjust", parameters: ["inputPower": power])
+            }
+            request.finish(with: image, context: nil)
+        }, completionHandler: { [weak playerItem] composition, _ in
+            guard let composition, let playerItem else { return }
+            Task { @MainActor in
+                playerItem.videoComposition = composition
+            }
+        })
+    }
+
+    func setSubtitleAppearance(
+        fontName: String, textColorHex: String, backgroundColorHex: String, backgroundOpacity: Double, codepage: String
+    ) {
         // Unsupported — see `capabilities`.
     }
 

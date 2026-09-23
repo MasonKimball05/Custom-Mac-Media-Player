@@ -4,6 +4,17 @@ import Combine
 import MediaPlayer
 import SwiftUI
 
+/// The playback state that changes ~10 times a second — split out of PlayerViewModel so
+/// those ticks only redraw views that actually display a clock. Published on the view
+/// model itself, every tick re-rendered everything observing it: the whole window, the
+/// app's menu-bar commands, and every open menu's ancestors, which made open menus
+/// (captions, playback speed) visibly flicker for as long as something was playing.
+@MainActor
+final class PlaybackClock: ObservableObject {
+    @Published fileprivate(set) var currentTime: Double = 0
+    @Published fileprivate(set) var bufferedFraction: Double = 0
+}
+
 /// Drives playback and exposes everything the custom UI needs as published state.
 /// This is the single source of truth views bind to — internally it delegates to
 /// whichever PlaybackEngine the current item needs (AVFoundation for everything it can
@@ -27,10 +38,28 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     @Published private(set) var recentFiles: [RecentFile] = []
 
     @Published private(set) var isPlaying = false
-    @Published private(set) var currentTime: Double = 0
     @Published private(set) var duration: Double = 0
-    @Published private(set) var bufferedFraction: Double = 0
     @Published private(set) var isLoading = false
+
+    /// Observe this (not the view model) for anything that needs to redraw as time
+    /// passes — see PlaybackClock. The two properties below just forward to it, so
+    /// reading the current time from anywhere else is unchanged.
+    let clock = PlaybackClock()
+
+    private(set) var currentTime: Double {
+        get { clock.currentTime }
+        set { clock.currentTime = newValue }
+    }
+
+    private(set) var bufferedFraction: Double {
+        get { clock.bufferedFraction }
+        set { clock.bufferedFraction = newValue }
+    }
+
+    /// Republished only when playback crosses into a different chapter, so the chapter
+    /// checkmark in the captions menu stays current without the menu watching the clock.
+    @Published private(set) var currentChapterID: Chapter.ID?
+    private var chapters: [Chapter] = []
     @Published private(set) var isVideoTrackPresent = true
     @Published private(set) var activeEngineKind: PlaybackEngineKind = .avFoundation
     @Published var errorMessage: String?
@@ -52,6 +81,69 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             if isPlaying { activeEngine.setRate(playbackRate) }
         }
     }
+
+    // MARK: Video adjustments (mpv-style -100...100, 0 = no change)
+
+    @Published var videoBrightness: Double = AppSettingsDefaults.videoAdjustment {
+        didSet {
+            applyVideoAdjustments()
+            UserDefaults.standard.set(videoBrightness, forKey: AppSettingsKeys.videoBrightness)
+        }
+    }
+    @Published var videoContrast: Double = AppSettingsDefaults.videoAdjustment {
+        didSet {
+            applyVideoAdjustments()
+            UserDefaults.standard.set(videoContrast, forKey: AppSettingsKeys.videoContrast)
+        }
+    }
+    @Published var videoSaturation: Double = AppSettingsDefaults.videoAdjustment {
+        didSet {
+            applyVideoAdjustments()
+            UserDefaults.standard.set(videoSaturation, forKey: AppSettingsKeys.videoSaturation)
+        }
+    }
+    @Published var videoGamma: Double = AppSettingsDefaults.videoAdjustment {
+        didSet {
+            applyVideoAdjustments()
+            UserDefaults.standard.set(videoGamma, forKey: AppSettingsKeys.videoGamma)
+        }
+    }
+
+    // MARK: Subtitle appearance (only meaningful when currentEngineCapabilities.subtitleAppearance)
+
+    @Published var subtitleFontName: String = AppSettingsDefaults.subtitleFontName {
+        didSet {
+            applySubtitleAppearance()
+            UserDefaults.standard.set(subtitleFontName, forKey: AppSettingsKeys.subtitleFontName)
+        }
+    }
+    @Published var subtitleTextColorHex: String = AppSettingsDefaults.subtitleTextColorHex {
+        didSet {
+            applySubtitleAppearance()
+            UserDefaults.standard.set(subtitleTextColorHex, forKey: AppSettingsKeys.subtitleTextColorHex)
+        }
+    }
+    @Published var subtitleBackgroundColorHex: String = AppSettingsDefaults.subtitleBackgroundColorHex {
+        didSet {
+            applySubtitleAppearance()
+            UserDefaults.standard.set(subtitleBackgroundColorHex, forKey: AppSettingsKeys.subtitleBackgroundColorHex)
+        }
+    }
+    @Published var subtitleBackgroundOpacity: Double = AppSettingsDefaults.subtitleBackgroundOpacity {
+        didSet {
+            applySubtitleAppearance()
+            UserDefaults.standard.set(subtitleBackgroundOpacity, forKey: AppSettingsKeys.subtitleBackgroundOpacity)
+        }
+    }
+    /// Overrides mpv's charset auto-detection for the loaded subtitle file — empty means
+    /// "auto." Fixes a legacy-encoded (non-UTF-8) file the auto-detector guessed wrong on.
+    @Published var subtitleCodepage: String = AppSettingsDefaults.subtitleCodepage {
+        didSet {
+            applySubtitleAppearance()
+            UserDefaults.standard.set(subtitleCodepage, forKey: AppSettingsKeys.subtitleCodepage)
+        }
+    }
+
     @Published var repeatMode: RepeatMode = .off
     @Published var isShuffled = false {
         didSet { regenerateShuffleOrder() }
@@ -93,6 +185,11 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
 
     private var lastSessionSaveDate = Date.distantPast
 
+    /// URLs currently holding an active security-scoped bookmark grant — tracked so we
+    /// start access at most once per URL (a file can appear in the current queue, a saved
+    /// playlist, and Open Recent all at once) and can release it once nothing needs it live.
+    private var securityScopedURLs = Set<URL>()
+
     override init() {
         super.init()
         avEngine.delegate = self
@@ -102,6 +199,34 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             volume = defaults.float(forKey: AppSettingsKeys.lastVolume)
         }
         isMuted = defaults.bool(forKey: AppSettingsKeys.lastMuted)
+
+        if defaults.object(forKey: AppSettingsKeys.videoBrightness) != nil {
+            videoBrightness = defaults.double(forKey: AppSettingsKeys.videoBrightness)
+        }
+        if defaults.object(forKey: AppSettingsKeys.videoContrast) != nil {
+            videoContrast = defaults.double(forKey: AppSettingsKeys.videoContrast)
+        }
+        if defaults.object(forKey: AppSettingsKeys.videoSaturation) != nil {
+            videoSaturation = defaults.double(forKey: AppSettingsKeys.videoSaturation)
+        }
+        if defaults.object(forKey: AppSettingsKeys.videoGamma) != nil {
+            videoGamma = defaults.double(forKey: AppSettingsKeys.videoGamma)
+        }
+        if let storedFontName = defaults.string(forKey: AppSettingsKeys.subtitleFontName) {
+            subtitleFontName = storedFontName
+        }
+        if let storedTextColor = defaults.string(forKey: AppSettingsKeys.subtitleTextColorHex) {
+            subtitleTextColorHex = storedTextColor
+        }
+        if let storedBackgroundColor = defaults.string(forKey: AppSettingsKeys.subtitleBackgroundColorHex) {
+            subtitleBackgroundColorHex = storedBackgroundColor
+        }
+        if defaults.object(forKey: AppSettingsKeys.subtitleBackgroundOpacity) != nil {
+            subtitleBackgroundOpacity = defaults.double(forKey: AppSettingsKeys.subtitleBackgroundOpacity)
+        }
+        if let storedCodepage = defaults.string(forKey: AppSettingsKeys.subtitleCodepage) {
+            subtitleCodepage = storedCodepage
+        }
 
         loadSavedPlaylistsLibrary()
         loadRecentFiles()
@@ -113,7 +238,15 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         // before Cmd+Q. Won't fire on a crash/force-quit, same as any app's autosave.
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.persistSession() }
+        ) { [weak self] _ in
+            // queue: .main guarantees this runs on the main thread, but the compiler
+            // can't see that through NotificationCenter's nonisolated closure type —
+            // assumeIsolated tells it what's already true instead of hopping to a
+            // Task, which could get cut off by process exit before it runs.
+            MainActor.assumeIsolated {
+                self?.persistSession()
+            }
+        }
     }
 
     // MARK: Playlist management
@@ -158,17 +291,14 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
 
     func removeItems(_ ids: Set<MediaItem.ID>) {
         guard !ids.isEmpty else { return }
+        let removedURLs = playlist.filter { ids.contains($0.id) }.map(\.url)
         playlist.removeAll { ids.contains($0.id) }
         shuffleOrder.removeAll { ids.contains($0) }
         if let currentItemID, ids.contains(currentItemID) {
-            activeEngine.stop()
-            self.currentItemID = nil
-            isPlaying = false
-            currentTime = 0
-            duration = 0
-            updateNowPlayingInfo()
+            resetPlaybackState()
         }
         persistSession()
+        releaseSecurityScopedAccessIfUnused(removedURLs)
     }
 
     func moveItems(fromOffsets source: IndexSet, toOffset destination: Int) {
@@ -177,24 +307,57 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     }
 
     func clearPlaylist() {
-        activeEngine.stop()
+        let removedURLs = playlist.map(\.url)
         playlist.removeAll()
         shuffleOrder.removeAll()
+        resetPlaybackState()
+        persistSession()
+        releaseSecurityScopedAccessIfUnused(removedURLs)
+    }
+
+    /// Stops the active engine and clears "what's playing" state — shared by every path
+    /// that empties or replaces the current queue, so they can't drift out of sync with
+    /// each other (one of them missing the Now Playing refresh, say) the way they used to.
+    private func resetPlaybackState() {
+        activeEngine.stop()
         currentItemID = nil
         isPlaying = false
         currentTime = 0
         duration = 0
-        persistSession()
+        chapters = []
+        currentChapterID = nil
         updateNowPlayingInfo()
     }
 
-    func play(item: MediaItem, resumeAt: Double = 0, autoPlay: Bool = true) {
+    /// `resumeAt: nil` (the default for every caller except session restore, which already
+    /// knows exactly where it left off) looks up a remembered per-file position instead —
+    /// see "Per-file resume position" below. Pass `0` explicitly to force starting over.
+    func play(item: MediaItem, resumeAt: Double? = nil, autoPlay: Bool = true) {
+        // Already loaded — e.g. clicking the currently-playing item again in the sidebar,
+        // or its own Continue Watching card while it's the current item. Reloading would
+        // restart it from the last periodically-saved resume position, which lags real
+        // playback by up to the save throttle's few seconds — that reads as a second copy
+        // that jumped backward, not as "still playing the one you already had going."
+        if item.id == currentItemID, resumeAt == nil {
+            if autoPlay, !isPlaying {
+                activeEngine.play()
+                isPlaying = true
+                updateNowPlayingInfo()
+            }
+            return
+        }
+
+        let startPosition = resumeAt ?? storedResumePosition(for: item.url)
         errorMessage = nil
         isLoading = true
         currentItemID = item.id
-        currentTime = resumeAt
+        currentTime = startPosition
         duration = 0
         bufferedFraction = 0
+        loopPointA = nil
+        loopPointB = nil
+        chapters = []
+        currentChapterID = nil
 
         let requiredEngineKind = MediaFormat.requiredEngine(for: item.url)
         if requiredEngineKind != activeEngineKind {
@@ -205,7 +368,12 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         activeEngine.load(url: item.url)
         activeEngine.setVolume(volume, muted: isMuted)
         activeEngine.setRate(playbackRate)
-        if resumeAt > 0 { activeEngine.seek(to: resumeAt) }
+        // Re-synced on every play(), not just when they change — switching from an
+        // AVFoundation- to an mpv-backed item (or back) lands on a different engine
+        // instance, and that instance has never heard these values before.
+        applyVideoAdjustments()
+        applySubtitleAppearance()
+        if startPosition > 0 { activeEngine.seek(to: startPosition) }
         if autoPlay {
             activeEngine.play()
         } else {
@@ -299,11 +467,46 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         seek(to: currentTime + seconds)
     }
 
+    // MARK: A–B loop
+
+    @Published private(set) var loopPointA: Double?
+    @Published private(set) var loopPointB: Double?
+
+    var isLoopActive: Bool { loopPointA != nil && loopPointB != nil }
+
+    /// Marks the loop start at the current position. Clears B if it's no longer after
+    /// the new A, same as scrubbing past your own loop-out point would invalidate it.
+    func setLoopPointA() {
+        loopPointA = currentTime
+        if let b = loopPointB, b <= currentTime {
+            loopPointB = nil
+        }
+    }
+
+    /// Marks the loop end and activates looping — needs an A already set and after it,
+    /// otherwise there's nothing sensible to loop.
+    func setLoopPointB() {
+        guard let a = loopPointA, currentTime > a else { return }
+        loopPointB = currentTime
+    }
+
+    func clearLoop() {
+        loopPointA = nil
+        loopPointB = nil
+    }
+
     // MARK: PlaybackEngineDelegate
 
     func engineDidUpdateTime(_ seconds: Double) {
         guard !isScrubbing else { return }
+
+        if let a = loopPointA, let b = loopPointB, seconds >= b {
+            seek(to: a)
+            return
+        }
+
         currentTime = seconds
+        updateCurrentChapter()
 
         // Throttled: this fires ~10x/sec, but "where you were" only needs second-ish
         // granularity, and writing to UserDefaults (or resyncing Control Center) that
@@ -313,6 +516,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         if now.timeIntervalSince(lastSessionSaveDate) > 5 {
             lastSessionSaveDate = now
             persistSession()
+            recordFileResumePosition()
             updateNowPlayingInfo()
         }
     }
@@ -335,6 +539,18 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         // Local files: once the engine reports ready, treat scrubbing as fully available.
         // AVFoundation will immediately refine this via loadedTimeRanges if it's more precise.
         bufferedFraction = 1
+        chapters = activeEngine.availableChapters().sorted { $0.startTime < $1.startTime }
+        updateCurrentChapter()
+    }
+
+    /// Assigns only on an actual change — this runs on every time tick, and publishing
+    /// the same value each time would bring back exactly the redraw storm PlaybackClock
+    /// exists to avoid.
+    private func updateCurrentChapter() {
+        let id = chapters.last { $0.startTime <= currentTime }?.id
+        if id != currentChapterID {
+            currentChapterID = id
+        }
     }
 
     func engineDidReachEndOfMedia() {
@@ -385,6 +601,27 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
 
     func setSubtitleScale(_ scale: Double) {
         activeEngine.setSubtitleScale(scale)
+    }
+
+    func resetVideoAdjustments() {
+        videoBrightness = 0
+        videoContrast = 0
+        videoSaturation = 0
+        videoGamma = 0
+    }
+
+    private func applyVideoAdjustments() {
+        activeEngine.setVideoAdjustments(
+            brightness: videoBrightness, contrast: videoContrast, saturation: videoSaturation, gamma: videoGamma
+        )
+    }
+
+    private func applySubtitleAppearance() {
+        activeEngine.setSubtitleAppearance(
+            fontName: subtitleFontName, textColorHex: subtitleTextColorHex,
+            backgroundColorHex: subtitleBackgroundColorHex, backgroundOpacity: subtitleBackgroundOpacity,
+            codepage: subtitleCodepage
+        )
     }
 
     /// AVFoundation has no real way to composite an external .srt onto an arbitrary
@@ -438,6 +675,106 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
 
     func generateThumbnail(at seconds: Double) async -> CGImage? {
         await activeEngine.generateThumbnail(at: seconds)
+    }
+
+    // MARK: Per-file resume position
+
+    /// Separate from session persistence above: that remembers one position for whatever's
+    /// currently queued, this remembers one per *file*, keyed by URL, so reopening any
+    /// previously-watched file (Open Recent, drag-drop, a different saved playlist) picks
+    /// up where you left off even if it's not part of "the current queue" anymore.
+    private func loadFileResumePositions() -> [String: Double] {
+        guard let data = UserDefaults.standard.data(forKey: AppSettingsKeys.perFileResumePositions),
+              let decoded = try? JSONDecoder().decode([String: Double].self, from: data) else { return [:] }
+        return decoded
+    }
+
+    private func storedResumePosition(for url: URL) -> Double {
+        loadFileResumePositions()[url.absoluteString] ?? 0
+    }
+
+    private func recordFileResumePosition() {
+        guard let item = currentItem else { return }
+        var positions = loadFileResumePositions()
+        // Within the last few seconds of the file: treat it as finished and forget the
+        // position, same as "continue watching" rows drop something you've actually seen.
+        // Barely started: not worth remembering either.
+        if duration > 0, duration - currentTime < 5 {
+            positions.removeValue(forKey: item.url.absoluteString)
+        } else if currentTime > 5 {
+            positions[item.url.absoluteString] = currentTime
+        } else {
+            return
+        }
+        guard let data = try? JSONEncoder().encode(positions) else { return }
+        UserDefaults.standard.set(data, forKey: AppSettingsKeys.perFileResumePositions)
+    }
+
+    /// The raw material for the home screen's "Continue Watching" row: recently-opened
+    /// files (so we have a title without re-resolving a bookmark) that still have a
+    /// remembered position. Deliberately cross-referenced against `recentFiles` rather
+    /// than exposing the position store directly — a file only ever opened by loading a
+    /// saved playlist (not through addFiles/openRecentFile) won't have a recent-files
+    /// entry to hang a title/thumbnail on, so it's left out rather than shown with no
+    /// usable label.
+    func continueWatchingEntries() -> [(file: RecentFile, position: Double)] {
+        let positions = loadFileResumePositions()
+        return recentFiles.compactMap { recent in
+            // Whatever's actually loaded right now reports its live position rather than
+            // the last throttled save, which lags real playback by up to a few seconds —
+            // with Home open over something still playing underneath, a stale row that
+            // only updates in visible jumps reads as broken. Same "barely started" /
+            // "basically finished" cutoffs recordFileResumePosition uses for the store,
+            // so the live row appears and disappears at the same points a saved one would.
+            if isCurrentItem(recent) {
+                let isNearEnd = duration > 0 && duration - currentTime < 5
+                guard currentTime > 5, !isNearEnd else { return nil }
+                return (recent, currentTime)
+            }
+            guard let position = positions[recent.urlString], position > 0 else { return nil }
+            return (recent, position)
+        }
+    }
+
+    /// Matched by URL rather than `MediaItem.id` — a RecentFile resolves to a brand-new
+    /// MediaItem with a fresh id every time, so ids never line up with what's in the queue.
+    private func isCurrentItem(_ recent: RecentFile) -> Bool {
+        currentItem?.url.absoluteString == recent.urlString
+    }
+
+    /// Drops just the remembered position for one file — pulls it out of Continue
+    /// Watching without touching Open Recent or the file itself; reopening it later just
+    /// starts over from the beginning. `objectWillChange` is sent explicitly because
+    /// `continueWatchingEntries()` reads UserDefaults directly rather than through a
+    /// `@Published` property, so nothing would otherwise tell an already-visible home
+    /// screen to refresh.
+    func removeFromContinueWatching(_ file: RecentFile) {
+        var positions = loadFileResumePositions()
+        positions.removeValue(forKey: file.urlString)
+        guard let data = try? JSONEncoder().encode(positions) else { return }
+        objectWillChange.send()
+        UserDefaults.standard.set(data, forKey: AppSettingsKeys.perFileResumePositions)
+    }
+
+    /// A Continue Watching card's cover image: the frame at the exact position you left
+    /// off, generated independently of whatever's actually loaded right now (the card's
+    /// file usually isn't the current item). Resolves its own bookmark and builds a
+    /// one-off AVAssetImageGenerator rather than going through `activeEngine`, since the
+    /// active engine only knows about the currently-playing item. Same AVFoundation-only
+    /// limitation as the live scrubber-hover preview: mpv-only formats (MKV/AVI/etc.)
+    /// return nil, and the card just falls back to its placeholder icon.
+    func generateHomeScreenThumbnail(for file: RecentFile, at seconds: Double) async -> CGImage? {
+        guard let item = resolveEntry(file.entry), MediaFormat.requiredEngine(for: item.url) == .avFoundation else {
+            return nil
+        }
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: item.url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 320, height: 320)
+        let tolerance = CMTime(seconds: 1, preferredTimescale: 600)
+        generator.requestedTimeToleranceBefore = tolerance
+        generator.requestedTimeToleranceAfter = tolerance
+        let time = CMTime(seconds: seconds, preferredTimescale: 600)
+        return try? await generator.image(at: time).image
     }
 
     // MARK: Session persistence
@@ -508,12 +845,28 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             guard let url = try? URL(
                 resolvingBookmarkData: bookmarkData, options: .withSecurityScope,
                 relativeTo: nil, bookmarkDataIsStale: &isStale
-            ), url.startAccessingSecurityScopedResource() else { return nil }
+            ) else { return nil }
+            if !securityScopedURLs.contains(url) {
+                guard url.startAccessingSecurityScopedResource() else { return nil }
+                securityScopedURLs.insert(url)
+            }
             return MediaItem(url: url)
         } else if let remoteURLString = entry.remoteURLString, let url = URL(string: remoteURLString) {
             return MediaItem(url: url)
         }
         return nil
+    }
+
+    /// Releases security-scoped access for any of `urls` that isn't (or is no longer,
+    /// after whatever mutation the caller just made) referenced by the live queue — the
+    /// only place a resolved URL's access needs to stay open. Safe to call with URLs that
+    /// were never scoped (network streams) or are still in use elsewhere; both are skipped.
+    private func releaseSecurityScopedAccessIfUnused(_ urls: [URL]) {
+        for url in urls {
+            guard securityScopedURLs.contains(url), !playlist.contains(where: { $0.url == url }) else { continue }
+            url.stopAccessingSecurityScopedResource()
+            securityScopedURLs.remove(url)
+        }
     }
 
     // MARK: Saved playlist library
@@ -555,15 +908,13 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// playing) so you can look at what's there before picking something.
     func loadSavedPlaylist(id: UUID) {
         guard let saved = savedPlaylists.first(where: { $0.id == id }) else { return }
-        activeEngine.stop()
+        let previousURLs = playlist.map(\.url)
         playlist = saved.entries.compactMap(resolveEntry)
-        shuffleOrder.removeAll()
-        currentItemID = nil
-        isPlaying = false
-        currentTime = 0
-        duration = 0
+        regenerateShuffleOrder()
+        resetPlaybackState()
         activeSavedPlaylistID = id
         persistSession()
+        releaseSecurityScopedAccessIfUnused(previousURLs)
     }
 
     func deleteSavedPlaylist(id: UUID) {
@@ -607,6 +958,15 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// Adds a recent file back onto the current queue and plays it — reopening it also
     /// bumps it back to the top of the list, like every other app's Open Recent.
     func openRecentFile(_ recent: RecentFile) {
+        // Already in the queue (possibly the very thing playing right now): play that
+        // entry rather than appending a second copy. For the current item, play(item:)
+        // is a no-op that just resumes it if paused — so this reads as "take me back to
+        // it," not a reload from the last throttled save.
+        if let existing = playlist.first(where: { $0.url.absoluteString == recent.urlString }) {
+            play(item: existing)
+            recordRecentFile(existing)
+            return
+        }
         guard let item = resolveEntry(recent.entry) else {
             errorMessage = "\u{201C}\(recent.title)\u{201D} isn't available anymore — it may have moved or been deleted."
             recentFiles.removeAll { $0.id == recent.id }

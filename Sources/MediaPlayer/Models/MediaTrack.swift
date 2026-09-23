@@ -26,17 +26,24 @@ struct MediaTrack: Identifiable, Hashable {
 
 /// What a given engine can actually do for tracks/subtitles — the UI uses this to show
 /// or hide controls instead of offering something that would silently no-op.
-struct EngineCapabilities {
+struct EngineCapabilities: Equatable {
     var externalSubtitles = false
     var subtitleTiming = false
     var subtitleScaling = false
+    var airPlay = false
+    /// Font/color/background styling — AVFoundation renders subtitles internally with
+    /// no public API to restyle them, the same reason it has no external-subtitle support.
+    var subtitleAppearance = false
 }
 
-/// One chapter marker, normalized across both engines.
+/// One chapter marker, normalized across both engines. Identified by its start time
+/// rather than a generated UUID: chapters are re-read from the engine on every redraw,
+/// and a fresh UUID each time made every read look like a brand-new set of items.
 struct Chapter: Identifiable, Hashable {
-    let id = UUID()
     let title: String
     let startTime: Double
+
+    var id: Double { startTime }
 }
 
 /// Snapshot of everything the Media Info panel (⌘I) shows.

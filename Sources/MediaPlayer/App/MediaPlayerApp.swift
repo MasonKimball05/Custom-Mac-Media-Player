@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -20,6 +21,11 @@ struct MediaPlayerApp: App {
                     NotificationCenter.default.post(name: .openMediaFile, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: .command)
+
+                Button("Open Folder\u{2026}") {
+                    NotificationCenter.default.post(name: .openMediaFolder, object: nil)
+                }
+                .keyboardShortcut("o", modifiers: [.command, .option])
 
                 Button("Open Network Stream\u{2026}") {
                     NotificationCenter.default.post(name: .openNetworkStream, object: nil)
@@ -129,6 +135,52 @@ struct MediaPlayerApp: App {
         Settings {
             SettingsView()
         }
+
+        // Quick transport + "what's playing" without having to bring the main window
+        // forward — handy once it's buried behind other windows. Only meaningful while
+        // the app itself is running, same as the rest of it: closing the last window
+        // still quits the app (see AppDelegate below), so this disappears along with it.
+        MenuBarExtra("Now Playing", systemImage: "play.square.stack") {
+            MenuBarNowPlayingView(viewModel: viewModel)
+        }
+    }
+}
+
+private struct MenuBarNowPlayingView: View {
+    @ObservedObject var viewModel: PlayerViewModel
+
+    var body: some View {
+        if let item = viewModel.currentItem {
+            Text(item.title)
+            Text(viewModel.isPlaying ? "Playing" : "Paused")
+        } else {
+            Text("Nothing Playing")
+        }
+
+        Divider()
+
+        Button(viewModel.isPlaying ? "Pause" : "Play") {
+            viewModel.togglePlayPause()
+        }
+        .disabled(viewModel.currentItem == nil)
+        Button("Next Track") { viewModel.playNext() }
+            .disabled(viewModel.currentItem == nil)
+        Button("Previous Track") { viewModel.playPrevious() }
+            .disabled(viewModel.currentItem == nil)
+
+        Divider()
+
+        Button("Show Media Player") {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        }
+
+        Divider()
+
+        Button("Quit Media Player") {
+            NSApp.terminate(nil)
+        }
+        .keyboardShortcut("q", modifiers: .command)
     }
 }
 

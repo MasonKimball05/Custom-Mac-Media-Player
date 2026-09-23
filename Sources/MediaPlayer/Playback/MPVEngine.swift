@@ -14,7 +14,9 @@ import Foundation
 @MainActor
 final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     weak var delegate: PlaybackEngineDelegate?
-    let capabilities = EngineCapabilities(externalSubtitles: true, subtitleTiming: true, subtitleScaling: true)
+    let capabilities = EngineCapabilities(
+        externalSubtitles: true, subtitleTiming: true, subtitleScaling: true, subtitleAppearance: true
+    )
 
     /// Set by the video view once it has an OpenGL context ready; called on the main
     /// thread whenever mpv has a new frame so the view can mark itself for redraw.
@@ -23,6 +25,12 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     nonisolated(unsafe) private var handle: OpaquePointer?
     private var renderContext: OpaquePointer?
     private static let eventQueue = DispatchQueue(label: "com.masonkimball.mediaplayer.mpv-events")
+
+    /// Mirrors of the last time-pos/duration values, kept for the buffered-fraction
+    /// calculation below — that runs on the background event-pump thread alongside
+    /// `handle`, so like `handle` this is deliberately not actor-isolated.
+    nonisolated(unsafe) private var lastKnownTime: Double = 0
+    nonisolated(unsafe) private var lastKnownDuration: Double = 0
 
     override init() {
         super.init()
@@ -34,9 +42,12 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
             delegate?.engineDidFail(message: "Could not create mpv instance.")
             return
         }
-        self.handle = handle
 
         mpv_set_option_string(handle, "vo", "libmpv")
+        // mpv's own default cap is 130 — raised so the app-level volume-boost setting
+        // (which is what actually gates whether callers ever send >100 here) isn't
+        // silently clamped a second time underneath it.
+        mpv_set_option_string(handle, "volume-max", "200")
         mpv_set_option_string(handle, "hwdec", "auto")
         mpv_set_option_string(handle, "keep-open", "yes")
         mpv_set_option_string(handle, "osc", "no")
@@ -47,11 +58,19 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         let initResult = mpv_initialize(handle)
         guard initResult >= 0 else {
             delegate?.engineDidFail(message: String(cString: mpv_error_string(initResult)))
+            // Created but never successfully initialized — every other method's `guard let
+            // handle` would otherwise treat this as a live handle if we stored it anyway.
+            mpv_terminate_destroy(handle)
             return
         }
+        self.handle = handle
 
         mpv_observe_property(handle, 0, "time-pos", MPV_FORMAT_DOUBLE)
         mpv_observe_property(handle, 0, "duration", MPV_FORMAT_DOUBLE)
+        // Seconds of media cached ahead of the current position — the closest mpv
+        // equivalent to AVFoundation's loadedTimeRanges, used to drive the scrubber's
+        // buffered-range indicator instead of leaving it pinned at "fully available".
+        mpv_observe_property(handle, 0, "demuxer-cache-time", MPV_FORMAT_DOUBLE)
 
         mpv_set_wakeup_callback(handle, mpvWakeupTrampoline, Unmanaged.passUnretained(self).toOpaque())
     }
@@ -68,7 +87,12 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
             ?? AppSettingsDefaults.hardwareDecodingEnabled
         mpv_set_option_string(handle, "hwdec", hardwareDecodingEnabled ? "auto" : "no")
 
-        url.path.withCString { pathPtr in
+        // A local file needs its filesystem path; anything else (http/https/rtsp/etc.,
+        // reachable when an external-subtitle load force-switches a network stream onto
+        // this engine) needs the full URL string, or mpv tries to open the bare path as
+        // a nonexistent local file. Same distinction the M3U export code already makes.
+        let target = url.isFileURL ? url.path : url.absoluteString
+        target.withCString { pathPtr in
             "loadfile".withCString { cmdPtr in
                 "replace".withCString { modePtr in
                     var args: [UnsafePointer<CChar>?] = [cmdPtr, pathPtr, modePtr, nil]
@@ -173,6 +197,45 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     func setSubtitleScale(_ scale: Double) {
         setDoubleProperty("sub-scale", scale)
+    }
+
+    func setVideoAdjustments(brightness: Double, contrast: Double, saturation: Double, gamma: Double) {
+        setDoubleProperty("brightness", brightness)
+        setDoubleProperty("contrast", contrast)
+        setDoubleProperty("saturation", saturation)
+        setDoubleProperty("gamma", gamma)
+    }
+
+    func setSubtitleAppearance(
+        fontName: String, textColorHex: String, backgroundColorHex: String, backgroundOpacity: Double, codepage: String
+    ) {
+        guard let handle else { return }
+        mpv_set_property_string(handle, "sub-font", fontName.isEmpty ? "" : fontName)
+        mpv_set_property_string(handle, "sub-color", mpvColorString(hex: textColorHex, opacity: 1))
+        // Fully transparent background reads as "no box" — mpv still wants a color, just
+        // with alpha 0, rather than a way to omit the back-color box entirely.
+        mpv_set_property_string(handle, "sub-back-color", mpvColorString(hex: backgroundColorHex, opacity: backgroundOpacity))
+
+        mpv_set_property_string(handle, "sub-codepage", codepage.isEmpty ? "auto" : codepage)
+        // Setting the property alone doesn't retroactively re-decode subtitles mpv already
+        // parsed with the old (wrong) charset guess. The obvious fix — the "sub-reload"
+        // command — turns out to only work for external subtitle *files*; its own docs say
+        // so, and it's silently a no-op for a track embedded in the container. Toggling the
+        // current track off and back on forces mpv to re-initialize its subtitle decoder
+        // either way, which does pick up a codepage change on an already-loaded file,
+        // embedded or external.
+        if let currentSid = getStringProperty("sid"), currentSid != "no" {
+            mpv_set_property_string(handle, "sid", "no")
+            mpv_set_property_string(handle, "sid", currentSid)
+        }
+    }
+
+    /// mpv color options take "#RRGGBB" or "#AARRGGBB" — folds a separate 0...1 opacity
+    /// into the alpha channel so callers don't have to hand-build the hex themselves.
+    private func mpvColorString(hex: String, opacity: Double) -> String {
+        let alpha = Int((max(0, min(1, opacity)) * 255).rounded())
+        let rgb = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        return String(format: "#%02X%@", alpha, rgb)
     }
 
     private func tracks(ofMpvType mpvType: String, kind: MediaTrack.Kind) -> [MediaTrack] {
@@ -359,9 +422,13 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
             guard value.isFinite else { return }
 
             if name == "time-pos" {
+                lastKnownTime = value
                 notifyTimeUpdate(value)
             } else if name == "duration", value > 0 {
+                lastKnownDuration = value
                 notifyDurationUpdate(value)
+            } else if name == "demuxer-cache-time" {
+                notifyBufferedFractionUpdate(cachedAheadSeconds: value)
             }
 
         case MPV_EVENT_FILE_LOADED:
@@ -387,6 +454,12 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     nonisolated private func notifyDurationUpdate(_ value: Double) {
         Task { @MainActor [weak self] in self?.delegate?.engineDidUpdateDuration(value) }
+    }
+
+    nonisolated private func notifyBufferedFractionUpdate(cachedAheadSeconds: Double) {
+        guard lastKnownDuration > 0 else { return }
+        let fraction = min(1, max(0, (lastKnownTime + cachedAheadSeconds) / lastKnownDuration))
+        Task { @MainActor [weak self] in self?.delegate?.engineDidUpdateBufferedFraction(fraction) }
     }
 
     nonisolated private func notifyEndOfMedia() {

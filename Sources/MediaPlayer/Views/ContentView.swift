@@ -12,8 +12,13 @@ struct ContentView: View {
     /// Owned here (not by PlayerContainerView) because hiding the window's toolbar —
     /// which is where the sidebar toggle lives — needs to react to it too.
     @State private var controlsVisible = true
+    @State private var showingHomeScreen = false
 
     @AppStorage(AppSettingsKeys.skipInterval) private var skipInterval = AppSettingsDefaults.skipInterval
+    @AppStorage(AppSettingsKeys.floatOnTop) private var floatOnTop = AppSettingsDefaults.floatOnTop
+    @AppStorage(AppSettingsKeys.autoDoNotDisturb) private var autoDoNotDisturb = AppSettingsDefaults.autoDoNotDisturb
+    @AppStorage(AppSettingsKeys.focusOnShortcutName) private var focusOnShortcutName = AppSettingsDefaults.focusOnShortcutName
+    @AppStorage(AppSettingsKeys.focusOffShortcutName) private var focusOffShortcutName = AppSettingsDefaults.focusOffShortcutName
     // A fixed-width sidebar + our own drag handle, rather than HSplitView: NSSplitView
     // grows panes proportionally when the window resizes, so entering fullscreen (a huge
     // width jump) blew the sidebar up along with it. A fixed width sidesteps that
@@ -27,7 +32,7 @@ struct ContentView: View {
     var body: some View {
         HStack(spacing: 0) {
             if showSidebar {
-                PlaylistSidebarView(viewModel: viewModel, onOpenFile: openFilePanel)
+                PlaylistSidebarView(viewModel: viewModel, showingHomeScreen: $showingHomeScreen, onOpenFile: openFilePanel)
                     .frame(width: sidebarWidth)
                     .transition(.move(edge: .leading))
 
@@ -38,6 +43,7 @@ struct ContentView: View {
                 viewModel: viewModel,
                 isFullscreen: $isFullscreen,
                 controlsVisible: $controlsVisible,
+                showingHomeScreen: $showingHomeScreen,
                 onToggleFullscreen: toggleFullscreen
             )
             .frame(minWidth: 480, minHeight: 300)
@@ -45,8 +51,16 @@ struct ContentView: View {
         }
         .background(WindowAccessor { resolvedWindow in
             window = resolvedWindow
+            resolvedWindow.level = floatOnTop ? .floating : .normal
             observeFullscreen(resolvedWindow)
         })
+        .onChange(of: floatOnTop) { _, newValue in
+            window?.level = newValue ? .floating : .normal
+        }
+        .onChange(of: isFullscreen) { _, enteredFullscreen in
+            guard autoDoNotDisturb else { return }
+            runFocusShortcut(named: enteredFullscreen ? focusOnShortcutName : focusOffShortcutName)
+        }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button {
@@ -58,6 +72,23 @@ struct ContentView: View {
                 }
                 .help("Toggle Playlist")
             }
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    showingHomeScreen = true
+                } label: {
+                    Image(systemName: "house")
+                }
+                .help("Home")
+                .disabled(viewModel.currentItem == nil)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    floatOnTop.toggle()
+                } label: {
+                    Image(systemName: floatOnTop ? "pin.fill" : "pin")
+                }
+                .help(floatOnTop ? "Turn Off Float on Top" : "Float on Top")
+            }
         }
         // In fullscreen, the toolbar (and the sidebar button in it) floats over the
         // video like our own controls do, so it should hide alongside them. In a
@@ -68,6 +99,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openMediaFile)) { _ in
             openFilePanel()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openMediaFolder)) { _ in
+            openFolderPanel()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openNetworkStream)) { _ in
             showingNetworkStreamSheet = true
@@ -95,6 +129,16 @@ struct ContentView: View {
             keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 handleGlobalKeyEvent(event) ? nil : event
             }
+            // Best-effort: if the app quits while still fullscreen (Cmd+Q rather than
+            // leaving fullscreen first), there's no isFullscreen transition to turn
+            // Focus back off on — this catches that instead of leaving it stuck on.
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+            ) { _ in
+                if autoDoNotDisturb, isFullscreen {
+                    runFocusShortcut(named: focusOffShortcutName)
+                }
+            }
         }
         .onDisappear {
             if let keyEventMonitor {
@@ -115,6 +159,34 @@ struct ContentView: View {
         }
     }
 
+    private func openFolderPanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.begin { response in
+            guard response == .OK else { return }
+            let files = panel.urls.flatMap(playableFiles(in:))
+            if !files.isEmpty {
+                viewModel.addFiles(files)
+            }
+        }
+    }
+
+    /// Recursively walks a folder for anything `MediaFormat` recognizes, in a stable
+    /// (filename-sorted) order — folders can come back from the OS in an arbitrary order,
+    /// and "the order I added them" matters for a playlist.
+    private func playableFiles(in folderURL: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: folderURL, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]
+        ) else { return [] }
+        var results: [URL] = []
+        for case let url as URL in enumerator where MediaFormat.isSupportedFile(url) {
+            results.append(url)
+        }
+        return results.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
     private func saveSnapshotPanel() {
         guard viewModel.currentItem != nil else { return }
         let panel = NSSavePanel()
@@ -128,6 +200,19 @@ struct ContentView: View {
 
     private func toggleFullscreen() {
         window?.toggleFullScreen(nil)
+    }
+
+    /// macOS gives apps no public API to toggle system Focus/Do Not Disturb directly —
+    /// this is the standard workaround, running a user-created Shortcuts.app shortcut
+    /// (containing a "Set Focus" action) by name via its URL scheme. Fire-and-forget:
+    /// there's no completion callback, and a missing/misnamed shortcut just does nothing
+    /// rather than erroring, since Shortcuts itself handles the "no such shortcut" case.
+    private func runFocusShortcut(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "shortcuts://run-shortcut?name=\(encoded)") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// YouTube-style single-key shortcuts, handled at the AppKit level (see the comment
@@ -166,23 +251,27 @@ struct ContentView: View {
         default: break
         }
 
+        let bindings = KeyBindingStore.currentBindings()
+        let key = characters.lowercased()
+
         guard viewModel.currentItem != nil else {
-            if characters.lowercased() == "f" {
+            if key == bindings[.toggleFullscreen] {
                 toggleFullscreen()
                 return true
             }
             return false
         }
 
-        switch characters.lowercased() {
-        case "k": viewModel.togglePlayPause(); return true
-        case "j": viewModel.skip(by: -skipInterval); return true
-        case "l": viewModel.skip(by: skipInterval); return true
-        case "m": viewModel.isMuted.toggle(); return true
-        case "f": toggleFullscreen(); return true
-        case "c": toggleCaptions(); return true
-        case ",": viewModel.stepFrame(forward: false); return true
-        case ".": viewModel.stepFrame(forward: true); return true
+        if key == bindings[.playPause] { viewModel.togglePlayPause(); return true }
+        if key == bindings[.skipBackward] { viewModel.skip(by: -skipInterval); return true }
+        if key == bindings[.skipForward] { viewModel.skip(by: skipInterval); return true }
+        if key == bindings[.mute] { viewModel.isMuted.toggle(); return true }
+        if key == bindings[.toggleFullscreen] { toggleFullscreen(); return true }
+        if key == bindings[.toggleCaptions] { toggleCaptions(); return true }
+        if key == bindings[.frameBack] { viewModel.stepFrame(forward: false); return true }
+        if key == bindings[.frameForward] { viewModel.stepFrame(forward: true); return true }
+
+        switch key {
         case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
             if let tenth = Int(characters), viewModel.duration > 0 {
                 viewModel.seek(to: Double(tenth) / 10 * viewModel.duration)
@@ -223,6 +312,7 @@ struct ContentView: View {
 
 extension Notification.Name {
     static let openMediaFile = Notification.Name("openMediaFile")
+    static let openMediaFolder = Notification.Name("openMediaFolder")
     static let openNetworkStream = Notification.Name("openNetworkStream")
     static let showMediaInfo = Notification.Name("showMediaInfo")
     static let saveSnapshot = Notification.Name("saveSnapshot")
