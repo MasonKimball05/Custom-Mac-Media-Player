@@ -46,6 +46,9 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// reading the current time from anywhere else is unchanged.
     let clock = PlaybackClock()
 
+    /// The current subtitle line and its translation — see SubtitleTranslationState.
+    let subtitleTranslation = SubtitleTranslationState()
+
     private(set) var currentTime: Double {
         get { clock.currentTime }
         set { clock.currentTime = newValue }
@@ -144,6 +147,23 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         }
     }
 
+    // MARK: Subtitle translation
+
+    /// While on, the engine stops drawing subtitles and the player's overlay draws each
+    /// line translated into `subtitleTranslationTarget` instead.
+    @Published var translateSubtitles: Bool = AppSettingsDefaults.translateSubtitles {
+        didSet {
+            applySubtitleTranslationMode()
+            UserDefaults.standard.set(translateSubtitles, forKey: AppSettingsKeys.translateSubtitles)
+        }
+    }
+    @Published var subtitleTranslationTarget: String = AppSettingsDefaults.subtitleTranslationTarget {
+        didSet {
+            subtitleTranslation.clearCache()
+            UserDefaults.standard.set(subtitleTranslationTarget, forKey: AppSettingsKeys.subtitleTranslationTarget)
+        }
+    }
+
     @Published var repeatMode: RepeatMode = .off
     @Published var isShuffled = false {
         didSet { regenerateShuffleOrder() }
@@ -226,6 +246,10 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         }
         if let storedCodepage = defaults.string(forKey: AppSettingsKeys.subtitleCodepage) {
             subtitleCodepage = storedCodepage
+        }
+        translateSubtitles = defaults.bool(forKey: AppSettingsKeys.translateSubtitles)
+        if let storedTarget = defaults.string(forKey: AppSettingsKeys.subtitleTranslationTarget) {
+            subtitleTranslationTarget = storedTarget
         }
 
         loadSavedPlaylistsLibrary()
@@ -326,6 +350,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         duration = 0
         chapters = []
         currentChapterID = nil
+        subtitleTranslation.reset()
         updateNowPlayingInfo()
     }
 
@@ -358,6 +383,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         loopPointB = nil
         chapters = []
         currentChapterID = nil
+        subtitleTranslation.reset()
 
         let requiredEngineKind = MediaFormat.requiredEngine(for: item.url)
         if requiredEngineKind != activeEngineKind {
@@ -373,6 +399,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         // instance, and that instance has never heard these values before.
         applyVideoAdjustments()
         applySubtitleAppearance()
+        applySubtitleTranslationMode()
         if startPosition > 0 { activeEngine.seek(to: startPosition) }
         if autoPlay {
             activeEngine.play()
@@ -533,6 +560,10 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         bufferedFraction = fraction
     }
 
+    func engineDidUpdateSubtitleText(_ text: String?) {
+        subtitleTranslation.update(sourceText: text)
+    }
+
     func engineDidBecomeReady(hasVideoTrack: Bool) {
         isLoading = false
         isVideoTrackPresent = hasVideoTrack
@@ -587,12 +618,17 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         activeEngine.availableChapters()
     }
 
+    /// Track selection lives in the engine, not in any published property here, so the
+    /// captions menu has to be told explicitly to re-read it — otherwise its checkmark
+    /// stays on the old track until something unrelated happens to trigger a redraw.
     func selectAudioTrack(id: String?) {
         activeEngine.selectAudioTrack(id: id)
+        objectWillChange.send()
     }
 
     func selectSubtitleTrack(id: String?) {
         activeEngine.selectSubtitleTrack(id: id)
+        objectWillChange.send()
     }
 
     func setSubtitleDelay(_ seconds: Double) {
@@ -614,6 +650,10 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         activeEngine.setVideoAdjustments(
             brightness: videoBrightness, contrast: videoContrast, saturation: videoSaturation, gamma: videoGamma
         )
+    }
+
+    private func applySubtitleTranslationMode() {
+        activeEngine.setNativeSubtitleRenderingEnabled(!translateSubtitles)
     }
 
     private func applySubtitleAppearance() {
@@ -641,12 +681,14 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             mpvEngine.load(url: item.url)
             mpvEngine.setVolume(volume, muted: isMuted)
             mpvEngine.setRate(playbackRate)
+            applySubtitleTranslationMode()
             mpvEngine.seek(to: resumeTime)
             currentTime = resumeTime
             if wasPlaying { mpvEngine.play() } else { mpvEngine.pause() }
             isPlaying = wasPlaying
         }
         mpvEngine.addExternalSubtitle(url: url)
+        objectWillChange.send()
     }
 
     // MARK: Frame step, snapshot, info

@@ -24,6 +24,8 @@ enum AppSettingsKeys {
     static let subtitleBackgroundColorHex = "subtitleBackgroundColorHex"
     static let subtitleBackgroundOpacity = "subtitleBackgroundOpacity"
     static let subtitleCodepage = "subtitleCodepage"
+    static let translateSubtitles = "translateSubtitles"
+    static let subtitleTranslationTarget = "subtitleTranslationTarget"
     static let customKeyBindings = "customKeyBindings"
     static let perFileResumePositions = "perFileResumePositions"
     static let autoDoNotDisturb = "autoDoNotDisturb"
@@ -48,6 +50,9 @@ enum AppSettingsDefaults {
     /// Empty means "auto-detect" — mpv's own charset guesser, which is what gets a
     /// legacy-encoded (non-UTF-8) subtitle file wrong often enough to need an override.
     static let subtitleCodepage = ""
+    static let translateSubtitles = false
+    /// A language identifier ("en", "el", ...), defaulting to the system language.
+    static let subtitleTranslationTarget = Locale.current.language.languageCode?.identifier ?? "en"
     static let autoDoNotDisturb = false
     static let focusOnShortcutName = "Focus On"
     static let focusOffShortcutName = "Focus Off"

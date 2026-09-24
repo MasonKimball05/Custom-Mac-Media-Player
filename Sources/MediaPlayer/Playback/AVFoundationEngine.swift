@@ -29,12 +29,21 @@ final class AVFoundationEngine: PlaybackEngine {
     private var itemDurationObservation: AnyCancellable?
     private var endObserver: AnyCancellable?
 
+    /// Reports subtitle text for translation. One per item: an output can only be attached
+    /// to a single AVPlayerItem at a time.
+    private var legibleOutput: AVPlayerItemLegibleOutput?
+    private let legibleDelegate = LegibleOutputDelegate()
+    private var nativeSubtitleRenderingEnabled = true
+
     init() {
         addPeriodicTimeObserver()
         endObserver = NotificationCenter.default
             .publisher(for: .AVPlayerItemDidPlayToEndTime)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.delegate?.engineDidReachEndOfMedia() }
+        legibleDelegate.onText = { [weak self] text in
+            self?.delegate?.engineDidUpdateSubtitleText(text)
+        }
     }
 
     deinit {
@@ -44,6 +53,7 @@ final class AVFoundationEngine: PlaybackEngine {
     }
 
     func load(url: URL) {
+        resetAssetDetails()
         let playerItem = AVPlayerItem(url: url)
         observe(playerItem: playerItem)
         // Adjustments carry across items once touched (same as volume/rate), so a new
@@ -52,6 +62,11 @@ final class AVFoundationEngine: PlaybackEngine {
         if hasVideoAdjustments {
             attachVideoComposition(to: playerItem)
         }
+        let output = AVPlayerItemLegibleOutput()
+        output.setDelegate(legibleDelegate, queue: .main)
+        output.suppressesPlayerRendering = !nativeSubtitleRenderingEnabled
+        playerItem.add(output)
+        legibleOutput = output
         player.replaceCurrentItem(with: playerItem)
     }
 
@@ -81,6 +96,8 @@ final class AVFoundationEngine: PlaybackEngine {
     }
 
     func stop() {
+        resetAssetDetails()
+        legibleOutput = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
@@ -96,12 +113,67 @@ final class AVFoundationEngine: PlaybackEngine {
     }
 
     func availableChapters() -> [Chapter] {
-        guard let asset = player.currentItem?.asset else { return [] }
-        let groups = asset.chapterMetadataGroups(withTitleLocale: Locale.current, containingItemsWithCommonKeys: [.commonKeyTitle])
-        return groups.map { group in
-            let title = group.items.first(where: { $0.commonKey == .commonKeyTitle })?.stringValue ?? "Chapter"
-            return Chapter(title: title, startTime: group.timeRange.start.seconds)
+        chapters
+    }
+
+    // MARK: Asset details (tracks, chapters)
+
+    /// Loaded once per item, asynchronously, when it becomes ready. The synchronous asset
+    /// accessors these replace (`mediaSelectionGroup(forMediaCharacteristic:)`,
+    /// `chapterMetadataGroups`, `tracks(withMediaType:)`) block the calling thread until
+    /// AVFoundation's own lower-priority loading queue is done. From the main thread,
+    /// that's a priority inversion and a hang risk, and the captions menu reads these
+    /// every time it redraws.
+    private var audioGroup: AVMediaSelectionGroup?
+    private var legibleGroup: AVMediaSelectionGroup?
+    private var chapters: [Chapter] = []
+    private var assetDetailsTask: Task<Void, Never>?
+
+    private func resetAssetDetails() {
+        assetDetailsTask?.cancel()
+        audioGroup = nil
+        legibleGroup = nil
+        chapters = []
+    }
+
+    /// Reports readiness to the delegate only after everything's cached, so anything it
+    /// reads in response (the view model reads chapters right away) sees the real values.
+    private func loadAssetDetails(for playerItem: AVPlayerItem) {
+        assetDetailsTask?.cancel()
+        assetDetailsTask = Task { [weak self] in
+            let asset = playerItem.asset
+            let videoTracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
+            let audio = try? await asset.loadMediaSelectionGroup(for: .audible)
+            let legible = try? await asset.loadMediaSelectionGroup(for: .legible)
+            let loadedChapters = await Self.loadChapters(from: asset)
+
+            // A different file may have been loaded while this was in flight.
+            guard let self, !Task.isCancelled, self.player.currentItem === playerItem else { return }
+            self.audioGroup = audio
+            self.legibleGroup = legible
+            self.chapters = loadedChapters
+            self.delegate?.engineDidBecomeReady(hasVideoTrack: !videoTracks.isEmpty)
         }
+    }
+
+    private static func loadChapters(from asset: AVAsset) async -> [Chapter] {
+        guard let groups = try? await asset.loadChapterMetadataGroups(
+            withTitleLocale: .current, containingItemsWithCommonKeys: [.commonKeyTitle]
+        ) else { return [] }
+
+        var result: [Chapter] = []
+        for group in groups {
+            var title: String?
+            if let titleItem = group.items.first(where: { $0.commonKey == .commonKeyTitle }) {
+                title = try? await titleItem.load(.stringValue)
+            }
+            result.append(Chapter(title: title ?? "Chapter \(result.count + 1)", startTime: group.timeRange.start.seconds))
+        }
+        return result
+    }
+
+    private func selectionGroup(for characteristic: AVMediaCharacteristic) -> AVMediaSelectionGroup? {
+        characteristic == .audible ? audioGroup : legibleGroup
     }
 
     func selectAudioTrack(id: String?) {
@@ -195,9 +267,13 @@ final class AVFoundationEngine: PlaybackEngine {
         // Unsupported — see `capabilities`.
     }
 
+    func setNativeSubtitleRenderingEnabled(_ enabled: Bool) {
+        nativeSubtitleRenderingEnabled = enabled
+        legibleOutput?.suppressesPlayerRendering = !enabled
+    }
+
     private func tracks(for characteristic: AVMediaCharacteristic, kind: MediaTrack.Kind) -> [MediaTrack] {
-        guard let item = player.currentItem,
-              let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: characteristic) else { return [] }
+        guard let item = player.currentItem, let group = selectionGroup(for: characteristic) else { return [] }
         let selected = item.currentMediaSelection.selectedMediaOption(in: group)
         return group.options.enumerated().map { index, option in
             MediaTrack(
@@ -211,8 +287,7 @@ final class AVFoundationEngine: PlaybackEngine {
     }
 
     private func selectTrack(id: String?, characteristic: AVMediaCharacteristic, allowsOff: Bool) {
-        guard let item = player.currentItem,
-              let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: characteristic) else { return }
+        guard let item = player.currentItem, let group = selectionGroup(for: characteristic) else { return }
         guard let id, let index = Int(id), group.options.indices.contains(index) else {
             item.select(allowsOff ? nil : group.defaultOption, in: group)
             return
@@ -344,8 +419,7 @@ final class AVFoundationEngine: PlaybackEngine {
                 guard let self else { return }
                 switch status {
                 case .readyToPlay:
-                    let hasVideo = !playerItem.asset.tracks(withMediaType: .video).isEmpty
-                    self.delegate?.engineDidBecomeReady(hasVideoTrack: hasVideo)
+                    self.loadAssetDetails(for: playerItem)
                 case .failed:
                     self.delegate?.engineDidFail(message: playerItem.error?.localizedDescription ?? "Playback failed.")
                 default:
@@ -360,5 +434,23 @@ final class AVFoundationEngine: PlaybackEngine {
                 guard seconds.isFinite, seconds > 0 else { return }
                 self?.delegate?.engineDidUpdateDuration(seconds)
             }
+    }
+}
+
+/// AVPlayerItemLegibleOutput needs an NSObject delegate, which the engine isn't.
+private final class LegibleOutputDelegate: NSObject, AVPlayerItemLegibleOutputPushDelegate {
+    var onText: (@MainActor (String?) -> Void)?
+
+    func legibleOutput(
+        _ output: AVPlayerItemLegibleOutput,
+        didOutputAttributedStrings strings: [NSAttributedString],
+        nativeSampleBuffers nativeSamples: [Any],
+        forItemTime itemTime: CMTime
+    ) {
+        let text = strings.map(\.string).joined(separator: "\n")
+        // Delivered on the main queue — see setDelegate(_:queue:) in AVFoundationEngine.load.
+        MainActor.assumeIsolated {
+            onText?(text.isEmpty ? nil : text)
+        }
     }
 }

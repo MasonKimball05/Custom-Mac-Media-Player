@@ -35,6 +35,33 @@ mpv's `sub-reload` command, which only applies to external subtitle files,
 it re-selects the current track — see `setSubtitleAppearance` in
 [MPVEngine.swift](Sources/MediaPlayer/Playback/MPVEngine.swift).
 
+### Subtitle translation
+
+Turn it on from the captions menu (Subtitles ▸ Translate Subtitles) or the
+sliders popover, which also sets the target language (defaults to your
+system language). It works with both engines and translates on-device, using
+Apple's Translation framework:
+
+- Each engine reports the plain text of the current subtitle line: mpv
+  through its `sub-text` property, AVFoundation through an
+  `AVPlayerItemLegibleOutput`. While translation is on, the engine's own
+  subtitle rendering is turned off (`sub-visibility`,
+  `suppressesPlayerRendering`) and
+  [TranslatedSubtitleOverlay.swift](Sources/MediaPlayer/Views/Player/TranslatedSubtitleOverlay.swift)
+  draws the translated line instead.
+- The session comes from SwiftUI's `.translationTask`, the variant that
+  detects the source language on its own and asks macOS to download a
+  language pair the first time it's needed. If a line can't be translated (an
+  unsupported pair, a declined download, a line too short to identify), the
+  original line is shown.
+- Lines and translations live on `SubtitleTranslationState`, separate from
+  the view model, for the same reason as `PlaybackClock` below: lines change
+  every few seconds and only the overlay needs to redraw.
+- A subtitle track has to be on, and it has to be text-based. Image-based
+  subtitles (common on Blu-ray and DVD rips) have no text to translate. Text
+  that's already garbled from a wrong encoding won't translate either, so fix
+  the Text Encoding first.
+
 And a round of "feels like a real Mac app" polish: Control Center/media-key
 integration (play/pause from the keyboard, AirPods, or the Now Playing
 widget — see `setUpNowPlayingCommands()`/`updateNowPlayingInfo()` in

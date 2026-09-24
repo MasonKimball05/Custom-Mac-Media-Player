@@ -71,6 +71,10 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         // equivalent to AVFoundation's loadedTimeRanges, used to drive the scrubber's
         // buffered-range indicator instead of leaving it pinned at "fully available".
         mpv_observe_property(handle, 0, "demuxer-cache-time", MPV_FORMAT_DOUBLE)
+        // Plain text of the current subtitle line, for translation. mpv keeps reporting it
+        // with sub-visibility off, which is what lets the app hide mpv's own rendering and
+        // draw a translated line instead.
+        mpv_observe_property(handle, 0, "sub-text", MPV_FORMAT_STRING)
 
         mpv_set_wakeup_callback(handle, mpvWakeupTrampoline, Unmanaged.passUnretained(self).toOpaque())
     }
@@ -228,6 +232,10 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
             mpv_set_property_string(handle, "sid", "no")
             mpv_set_property_string(handle, "sid", currentSid)
         }
+    }
+
+    func setNativeSubtitleRenderingEnabled(_ enabled: Bool) {
+        setFlag("sub-visibility", enabled)
     }
 
     /// mpv color options take "#RRGGBB" or "#AARRGGBB" — folds a separate 0...1 opacity
@@ -416,8 +424,22 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         case MPV_EVENT_PROPERTY_CHANGE:
             guard let dataPtr = event.data else { return }
             let property = dataPtr.assumingMemoryBound(to: mpv_event_property.self).pointee
-            guard property.format == MPV_FORMAT_DOUBLE, let namePtr = property.name, let valuePtr = property.data else { return }
+            guard let namePtr = property.name else { return }
             let name = String(cString: namePtr)
+
+            if name == "sub-text" {
+                // MPV_FORMAT_NONE when there's no subtitle track at all; an empty string
+                // between lines or for image-based subtitles.
+                var text: String?
+                if property.format == MPV_FORMAT_STRING, let valuePtr = property.data,
+                   let cString = valuePtr.assumingMemoryBound(to: UnsafePointer<CChar>?.self).pointee {
+                    text = String(cString: cString)
+                }
+                notifySubtitleText(text?.isEmpty == false ? text : nil)
+                return
+            }
+
+            guard property.format == MPV_FORMAT_DOUBLE, let valuePtr = property.data else { return }
             let value = valuePtr.assumingMemoryBound(to: Double.self).pointee
             guard value.isFinite else { return }
 
@@ -454,6 +476,10 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     nonisolated private func notifyDurationUpdate(_ value: Double) {
         Task { @MainActor [weak self] in self?.delegate?.engineDidUpdateDuration(value) }
+    }
+
+    nonisolated private func notifySubtitleText(_ text: String?) {
+        Task { @MainActor [weak self] in self?.delegate?.engineDidUpdateSubtitleText(text) }
     }
 
     nonisolated private func notifyBufferedFractionUpdate(cachedAheadSeconds: Double) {

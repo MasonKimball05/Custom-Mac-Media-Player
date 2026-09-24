@@ -20,6 +20,7 @@ struct TrackMenuButton: View {
                 audioTracks: viewModel.availableAudioTracks(),
                 subtitleTracks: viewModel.availableSubtitleTracks(),
                 capabilities: viewModel.currentEngineCapabilities,
+                isTranslating: viewModel.translateSubtitles,
                 isEnabled: viewModel.currentItem != nil
             )
         )
@@ -33,6 +34,7 @@ private struct TrackMenuContents: Equatable {
     let audioTracks: [MediaTrack]
     let subtitleTracks: [MediaTrack]
     let capabilities: EngineCapabilities
+    let isTranslating: Bool
     let isEnabled: Bool
 }
 
@@ -107,6 +109,15 @@ private struct TrackMenu: View, Equatable {
                 Divider()
                 Button("Load Subtitle File\u{2026}") {
                     openSubtitlePanel()
+                }
+                Button {
+                    viewModel.translateSubtitles.toggle()
+                } label: {
+                    if contents.isTranslating {
+                        Label("Translate Subtitles", systemImage: "checkmark")
+                    } else {
+                        Text("Translate Subtitles")
+                    }
                 }
 
                 if contents.capabilities.subtitleTiming || contents.capabilities.subtitleScaling {

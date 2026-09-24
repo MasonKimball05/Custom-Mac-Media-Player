@@ -59,6 +59,10 @@ protocol PlaybackEngineDelegate: AnyObject {
     func engineDidBecomeReady(hasVideoTrack: Bool)
     func engineDidReachEndOfMedia()
     func engineDidFail(message: String)
+    /// The plain text of the subtitle line currently showing, or nil when none is. Reported
+    /// whether or not the engine is drawing subtitles itself. Image-based subtitle tracks
+    /// (DVD/Blu-ray style) have no text to report.
+    func engineDidUpdateSubtitleText(_ text: String?)
 }
 
 /// Common playback surface both engines implement. Rendering is deliberately out of
@@ -116,4 +120,8 @@ protocol PlaybackEngine: AnyObject {
     func setSubtitleAppearance(
         fontName: String, textColorHex: String, backgroundColorHex: String, backgroundOpacity: Double, codepage: String
     )
+
+    /// Turned off while the app draws translated subtitles itself, so the original line
+    /// isn't drawn underneath the translation. Subtitle text keeps being reported either way.
+    func setNativeSubtitleRenderingEnabled(_ enabled: Bool)
 }

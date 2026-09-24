@@ -1,6 +1,6 @@
 ## v1.3.0
 
-This release adds a home screen, new audio, video, and subtitle controls, trackpad and menu bar integration, and a number of reliability fixes.
+This release adds a home screen, on-device subtitle translation, new audio, video, and subtitle controls, trackpad and menu bar integration, and a number of reliability fixes.
 
 ### Home Screen
 
@@ -25,6 +25,7 @@ This release adds a home screen, new audio, video, and subtitle controls, trackp
 - Brightness, contrast, saturation, and gamma adjustment, for all supported formats
 - Subtitle font, text color, and background color and opacity (MKV/AVI/etc.)
 - Subtitle text encoding selection, for subtitles that display as garbled characters (MKV/AVI/etc.)
+- Subtitle translation into your chosen language, performed on-device with Apple's Translation framework (text-based subtitle tracks)
 
 ### Interface and macOS Integration
 
@@ -47,6 +48,7 @@ This release adds a home screen, new audio, video, and subtitle controls, trackp
 - Improved reliability of file access in long sessions that repeatedly switch playlists or reopen recent files
 - Fixed a launch failure ("different Team IDs") when loading the mpv library under Hardened Runtime
 - Improved stability of the mpv engine's startup and end-of-file handling
+- Fixed a possible hang when opening the captions menu for MP4, MOV, and other AVFoundation-backed files
 - Playback time updates no longer redraw the entire interface
 
 ### Requirements

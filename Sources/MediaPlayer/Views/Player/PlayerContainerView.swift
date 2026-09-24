@@ -70,6 +70,14 @@ struct PlayerContainerView: View {
                 }
             }
 
+            if viewModel.translateSubtitles, viewModel.currentItem != nil {
+                TranslatedSubtitleOverlay(
+                    state: viewModel.subtitleTranslation,
+                    targetLanguage: viewModel.subtitleTranslationTarget,
+                    controlsVisible: controlsVisible
+                )
+            }
+
             if viewModel.isLoading {
                 ProgressView()
                     .controlSize(.large)

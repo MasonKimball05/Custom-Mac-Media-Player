@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Translation
 
 /// Video color adjustments + (when the active engine supports it) subtitle appearance,
 /// tucked behind one toolbar icon and a popover rather than a permanent bank of sliders —
@@ -95,11 +96,46 @@ private struct AdjustmentsPopoverContent: View {
                     Text("Subtitle Appearance")
                 }
             }
+
+            Section {
+                Toggle("Translate subtitles", isOn: $viewModel.translateSubtitles)
+                VStack(alignment: .leading, spacing: 2) {
+                    Picker("Translate to", selection: $viewModel.subtitleTranslationTarget) {
+                        ForEach(targetLanguageOptions, id: \.identifier) { option in
+                            Text(option.name).tag(option.identifier)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    Text("Uses Apple's on-device translation; macOS may ask to download a language the first time. Needs a text-based subtitle track, so image-based ones (common on Blu-ray and DVD rips) can't be translated.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Subtitle Translation")
+            }
         }
         .formStyle(.grouped)
         .frame(width: 320)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 8)
+        .task {
+            supportedLanguages = await LanguageAvailability().supportedLanguages
+        }
+    }
+
+    @State private var supportedLanguages: [Locale.Language] = []
+
+    /// Supported languages by display name, always including the current selection even
+    /// if it isn't in the list verbatim (e.g. the default "en" versus a listed "en-US"),
+    /// so the picker never shows a blank selection.
+    private var targetLanguageOptions: [(identifier: String, name: String)] {
+        var identifiers = supportedLanguages.map(\.minimalIdentifier)
+        if !identifiers.contains(viewModel.subtitleTranslationTarget) {
+            identifiers.append(viewModel.subtitleTranslationTarget)
+        }
+        return Set(identifiers)
+            .map { (identifier: $0, name: Locale.current.localizedString(forIdentifier: $0) ?? $0) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     @ViewBuilder
