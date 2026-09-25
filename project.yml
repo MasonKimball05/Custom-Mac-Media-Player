@@ -11,7 +11,7 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     ENABLE_HARDENED_RUNTIME: YES
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: F4P3T9JYP2
 
 targets:
   MediaPlayer:
@@ -124,6 +124,16 @@ targets:
         # signed under Homebrew's own identity, not ours. Without this, launching the app
         # fails at the dyld step with "different Team IDs" for that exact library.
         com.apple.security.cs.disable-library-validation: true
+        # Download from URL runs the user's Homebrew yt-dlp (and, through it, ffmpeg and
+        # deno). /opt/homebrew doesn't exist as far as a sandboxed process is concerned,
+        # and yt-dlp runs inside this app's sandbox, so it needs read (and execute) access.
+        com.apple.security.temporary-exception.files.absolute-path.read-only:
+          - /opt/homebrew/
+        # mpv runs its built-in scripts through LuaJIT, which generates machine code at
+        # runtime. Hardened Runtime kills the process ("Code Signature Invalid") the first
+        # time that code runs unless JIT is allowed. MPVEngine turns off the built-in
+        # scripts this app has no use for, but a Homebrew mpv upgrade can add new ones.
+        com.apple.security.cs.allow-jit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.masonkimball.MediaPlayer

@@ -18,6 +18,11 @@ struct PlayerContainerView: View {
 
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var isDropTargeted = false
+    /// Measured, not assumed: the bar's height depends on its contents and the system font
+    /// size, and subtitles need to clear it exactly. The estimate only stands in until the
+    /// bar has been laid out once.
+    @State private var controlsBarHeight: CGFloat = 110
+    @State private var stageHeight: CGFloat = 0
 
     @AppStorage(AppSettingsKeys.autoHideControlsDelay) private var autoHideDelay = AppSettingsDefaults.autoHideControlsDelay
 
@@ -70,11 +75,12 @@ struct PlayerContainerView: View {
                 }
             }
 
-            if viewModel.translateSubtitles, viewModel.currentItem != nil {
-                TranslatedSubtitleOverlay(
+            if viewModel.drawsSubtitlesInApp, viewModel.currentItem != nil {
+                SubtitleOverlay(
                     state: viewModel.subtitleTranslation,
+                    isTranslating: viewModel.translateSubtitles,
                     targetLanguage: viewModel.subtitleTranslationTarget,
-                    controlsVisible: controlsVisible
+                    bottomInset: max(36, controlsCoverHeight + 8)
                 )
             }
 
@@ -96,7 +102,8 @@ struct PlayerContainerView: View {
                         isFullscreen: isFullscreen,
                         onToggleFullscreen: onToggleFullscreen
                     )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsBarHeight = $0 }
+                    .transition(.opacity)
                 }
             }
 
@@ -114,6 +121,12 @@ struct PlayerContainerView: View {
                 }
                 .transition(.opacity)
             }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stageHeight = $0 }
+        // mpv draws its own subtitles and moves them itself (see drawsSubtitlesInApp), as a
+        // fraction of the video's height rather than in points.
+        .onChange(of: engineSubtitleInsetFraction, initial: true) { _, fraction in
+            viewModel.setSubtitleBottomInset(fraction)
         }
         .onContinuousHover { phase in
             switch phase {
@@ -161,6 +174,16 @@ struct PlayerContainerView: View {
         }
     }
 
+    /// How much of the bottom of the video the controls bar covers right now. Subtitles move
+    /// up by this much while it's showing, so they stay readable above it.
+    private var controlsCoverHeight: CGFloat {
+        controlsVisible && viewModel.currentItem != nil ? controlsBarHeight : 0
+    }
+
+    private var engineSubtitleInsetFraction: Double {
+        stageHeight > 0 ? Double(controlsCoverHeight / stageHeight) : 0
+    }
+
     private var hasHomeScreenContent: Bool {
         !viewModel.continueWatchingEntries().isEmpty || !viewModel.savedPlaylists.isEmpty
     }
@@ -203,7 +226,7 @@ struct PlayerContainerView: View {
         }
     }
 
-    /// Continuous rather than snapped to PlaybackSpeedMenu's presets — a physical pinch
+    /// Continuous rather than snapped to PlaybackSpeed's presets — a physical pinch
     /// reads as a smooth, self-limiting gesture (each callback multiplies the current
     /// rate by a small factor) rather than discrete steps, and both engines already
     /// accept an arbitrary rate, not just the menu's curated list.
@@ -335,6 +358,11 @@ private struct HomeScreenView: View {
                 // ZStack centers that small island in the middle of the black stage
                 // instead of filling it top-to-bottom.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                // On macOS 26 a scroll view's content keeps drawing as it scrolls up under
+                // the window's toolbar. That suits a translucent toolbar, but this one is
+                // solid, so rows scrolled past the top showed on top of it. Clipping keeps
+                // the list inside the player area.
+                .clipped()
             }
         }
     }

@@ -8,38 +8,42 @@
 
 /* Begin PBXBuildFile section */
 		0436066502A4ED40DD311DE4 /* ShortcutsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C52BB7DFEEE7409FC890608 /* ShortcutsSettingsView.swift */; };
+		0489B6BA9963757F972E376E /* SettingsMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9250CAFAF43696BAEB888C5B /* SettingsMenuButton.swift */; };
 		0A7CDC85F8F2970340407C9A /* MPVEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1502E8485E9072402A3AD77 /* MPVEngine.swift */; };
 		12744E5EB123ECD75B41EE32 /* SavedPlaylist.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3E1EC9F83E8ADF8EB7417E /* SavedPlaylist.swift */; };
+		1934404976FC63C2801F47A3 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E205E57D5A276BD9E0D9619 /* SubtitleOverlay.swift */; };
 		1C9FF13DF2D85E6045407BDF /* TrackpadGestureCatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF6FAE6B78CEA0FD25F4542F /* TrackpadGestureCatcher.swift */; };
 		28300FA54868772F3F4142B6 /* AppSettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FEB576328E522B87F0FF31C /* AppSettingsKeys.swift */; };
 		2B6BE2819183C8DB6B3D8AC1 /* ScrubberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA55D7BE7C938101D560358 /* ScrubberView.swift */; };
 		3014C4F4567A9537C68E79F3 /* PlaybackControlsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B37E3132ADFF312ABE3E05 /* PlaybackControlsBar.swift */; };
+		320AFB2D74EA027BA790B3FC /* RollUpCaptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DBA0DE54CDABBE795EF89C /* RollUpCaptions.swift */; };
 		3492F13AD4D5C67443C9C40D /* AVFoundationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6015F736AF75A57FD9D24A25 /* AVFoundationEngine.swift */; };
+		38F7D0C3D7E2469395A0077F /* DownloadFromURLView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68CE9EA9BBAC07FFCCE1F4EA /* DownloadFromURLView.swift */; };
 		4423EF3C9917EA43CD4F76AD /* MediaItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27E47776555DA32F12625234 /* MediaItem.swift */; };
 		473ED1DD6A872E34140EC692 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C55E6BC275DB672915EAA0 /* ContentView.swift */; };
 		482CE246061B16058BF33542 /* ControlButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B471B5F8C6972C43C798EF2 /* ControlButton.swift */; };
 		495288AD875FBE33E30C6886 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2269551A50F7412EF5C4435C /* SettingsView.swift */; };
 		49A888549CABEB579494C965 /* SavePlaylistNameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B712DA282A6E5BD2FCE3BF /* SavePlaylistNameView.swift */; };
 		4F071237EDB18B7F76840E91 /* PersistedSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC842256D600E2CB13D2FFF /* PersistedSession.swift */; };
-		50C9EEC5652BFD9B1BB9BBC4 /* AdjustmentsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55FD0A7FA05A48817832FC78 /* AdjustmentsButton.swift */; };
 		6177F5CA7324233F4A627F06 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DEFF983C6AEE7BE3F2F0F28E /* Assets.xcassets */; };
+		6B9D318122F661F1F49FA48B /* AdjustmentsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4EF868B7893F491069BC11 /* AdjustmentsPanel.swift */; };
 		6DCED9F1CBEFFA10EE168BAE /* RemappableAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3A6819C787DB607B98579E /* RemappableAction.swift */; };
 		7575F225AF21D45D135248AE /* VolumeControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2DE4C984D23BDE612D8B7CB /* VolumeControl.swift */; };
+		7EEE67647FA1B91C3680DAA8 /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810A29C03C647B0C5702FCC0 /* DownloadManager.swift */; };
 		8005D408648083CD463C4B1B /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9D881F51777620B02E551E /* WindowAccessor.swift */; };
 		A1F8F53C3E0FF83365F327B2 /* TimeFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCFB81A87249188451B967A /* TimeFormatter.swift */; };
 		A452D5FD2B04AC7BCD3E72C8 /* PlaylistSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D444ADC1D5347331A84254F8 /* PlaylistSidebarView.swift */; };
-		ADBFC05D904D43DDEF4A9A1B /* TranslatedSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7AA29D4C559F1F77C9A846 /* TranslatedSubtitleOverlay.swift */; };
 		AF7A2BC2FF1006F0A75FAFB7 /* MediaTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C006E99B490A91F9BBE24D4 /* MediaTrack.swift */; };
 		B157F7CEC7F4364ECBA5673D /* MediaInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 542B908EBF8766172E588F47 /* MediaInfoView.swift */; };
 		B793085401767FC229839086 /* MPVVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5777D6160099F2E8A72A998D /* MPVVideoView.swift */; };
 		B82DDD3F7792F698492D9821 /* SubtitleTranslationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739FDC61A73C195BE8A18B3B /* SubtitleTranslationState.swift */; };
-		BC8606EB700FC43C18A28BD8 /* PlaybackSpeedMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4018277FF5629D537F9C39 /* PlaybackSpeedMenu.swift */; };
+		BA8905BE05616445A9CFDBE6 /* DownloadsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8FA8996BF20C4D1EA30F403 /* DownloadsButton.swift */; };
 		C0DE3A81280610DF512B8E66 /* PlayerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4F55D5B12A74DDCF7C1657 /* PlayerViewModel.swift */; };
 		C223A973C8E506B953813318 /* PlayerContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F69F0B5DCA19B4AB6EA6068 /* PlayerContainerView.swift */; };
 		C2D6AF6F95B8D407C8D872C9 /* AirPlayButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517731304A8354D1B86F4534 /* AirPlayButton.swift */; };
 		C728F9BC94FF20B4C14EBB48 /* VisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C492C7B056D1CC3A840B2A9 /* VisualEffectView.swift */; };
 		C8FFC668CF6925C5BA0F244C /* VideoLayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785CB6D7748F5943CBB0A631 /* VideoLayerView.swift */; };
-		DFAC0C09995A169B2D9CF50A /* TrackMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BECFC81DFDDDA40A08E8CA7 /* TrackMenuButton.swift */; };
+		D7451BDEFB9143F9CDE40CF6 /* YTDLP.swift in Sources */ = {isa = PBXBuildFile; fileRef = D730773159AEA7B26F99158B /* YTDLP.swift */; };
 		E72FBFE6C6ECA5CF58DEF2A5 /* PlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 427E9039867F139A0CB0740B /* PlaybackEngine.swift */; };
 		F476BF0B7B22D01E9AF397AB /* MediaPlayerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7B344D17A64BE380BC63B51 /* MediaPlayerApp.swift */; };
 		F7142FF4F8FAA43B3AC00D59 /* ABLoopButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52F6B3A0FBB0FFED86E10BA7 /* ABLoopButton.swift */; };
@@ -47,9 +51,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0BECFC81DFDDDA40A08E8CA7 /* TrackMenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMenuButton.swift; sourceTree = "<group>"; };
 		0C492C7B056D1CC3A840B2A9 /* VisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectView.swift; sourceTree = "<group>"; };
 		0F77681E32BD2647E2112C87 /* OpenNetworkStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenNetworkStreamView.swift; sourceTree = "<group>"; };
+		11DBA0DE54CDABBE795EF89C /* RollUpCaptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RollUpCaptions.swift; sourceTree = "<group>"; };
 		19B712DA282A6E5BD2FCE3BF /* SavePlaylistNameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaylistNameView.swift; sourceTree = "<group>"; };
 		1CCFB81A87249188451B967A /* TimeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatter.swift; sourceTree = "<group>"; };
 		2269551A50F7412EF5C4435C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -58,36 +62,40 @@
 		2FEB576328E522B87F0FF31C /* AppSettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsKeys.swift; sourceTree = "<group>"; };
 		3B471B5F8C6972C43C798EF2 /* ControlButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlButton.swift; sourceTree = "<group>"; };
 		3BA55D7BE7C938101D560358 /* ScrubberView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrubberView.swift; sourceTree = "<group>"; };
+		3F4EF868B7893F491069BC11 /* AdjustmentsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustmentsPanel.swift; sourceTree = "<group>"; };
 		427E9039867F139A0CB0740B /* PlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackEngine.swift; sourceTree = "<group>"; };
 		47B37E3132ADFF312ABE3E05 /* PlaybackControlsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackControlsBar.swift; sourceTree = "<group>"; };
 		4C006E99B490A91F9BBE24D4 /* MediaTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTrack.swift; sourceTree = "<group>"; };
 		517731304A8354D1B86F4534 /* AirPlayButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayButton.swift; sourceTree = "<group>"; };
 		52F6B3A0FBB0FFED86E10BA7 /* ABLoopButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABLoopButton.swift; sourceTree = "<group>"; };
 		542B908EBF8766172E588F47 /* MediaInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaInfoView.swift; sourceTree = "<group>"; };
-		55FD0A7FA05A48817832FC78 /* AdjustmentsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustmentsButton.swift; sourceTree = "<group>"; };
 		5777D6160099F2E8A72A998D /* MPVVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVVideoView.swift; sourceTree = "<group>"; };
 		579D0FFDD62A4D2A44B3FD60 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		6015F736AF75A57FD9D24A25 /* AVFoundationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVFoundationEngine.swift; sourceTree = "<group>"; };
-		6F7AA29D4C559F1F77C9A846 /* TranslatedSubtitleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslatedSubtitleOverlay.swift; sourceTree = "<group>"; };
+		68CE9EA9BBAC07FFCCE1F4EA /* DownloadFromURLView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadFromURLView.swift; sourceTree = "<group>"; };
 		739FDC61A73C195BE8A18B3B /* SubtitleTranslationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleTranslationState.swift; sourceTree = "<group>"; };
 		785CB6D7748F5943CBB0A631 /* VideoLayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoLayerView.swift; sourceTree = "<group>"; };
 		7ACDAE2354C6F66649E35A39 /* MediaPlayer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MediaPlayer.entitlements; sourceTree = "<group>"; };
 		7C4F55D5B12A74DDCF7C1657 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
+		7E205E57D5A276BD9E0D9619 /* SubtitleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleOverlay.swift; sourceTree = "<group>"; };
 		7F69F0B5DCA19B4AB6EA6068 /* PlayerContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerContainerView.swift; sourceTree = "<group>"; };
+		810A29C03C647B0C5702FCC0 /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
+		9250CAFAF43696BAEB888C5B /* SettingsMenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsMenuButton.swift; sourceTree = "<group>"; };
 		A1502E8485E9072402A3AD77 /* MPVEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVEngine.swift; sourceTree = "<group>"; };
 		AF6FAE6B78CEA0FD25F4542F /* TrackpadGestureCatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackpadGestureCatcher.swift; sourceTree = "<group>"; };
 		B7B344D17A64BE380BC63B51 /* MediaPlayerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerApp.swift; sourceTree = "<group>"; };
 		B8C55E6BC275DB672915EAA0 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B8FA8996BF20C4D1EA30F403 /* DownloadsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsButton.swift; sourceTree = "<group>"; };
 		C2DE4C984D23BDE612D8B7CB /* VolumeControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeControl.swift; sourceTree = "<group>"; };
 		CA3A6819C787DB607B98579E /* RemappableAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemappableAction.swift; sourceTree = "<group>"; };
 		CD3E1EC9F83E8ADF8EB7417E /* SavedPlaylist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPlaylist.swift; sourceTree = "<group>"; };
 		D444ADC1D5347331A84254F8 /* PlaylistSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistSidebarView.swift; sourceTree = "<group>"; };
-		DB4018277FF5629D537F9C39 /* PlaybackSpeedMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackSpeedMenu.swift; sourceTree = "<group>"; };
+		D730773159AEA7B26F99158B /* YTDLP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLP.swift; sourceTree = "<group>"; };
 		DC9D881F51777620B02E551E /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		DEFF983C6AEE7BE3F2F0F28E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DFC842256D600E2CB13D2FFF /* PersistedSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedSession.swift; sourceTree = "<group>"; };
 		E1DFEFF772CC9E18E785CA45 /* MediaPlayer-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "MediaPlayer-Bridging-Header.h"; sourceTree = "<group>"; };
-		E5B3638C4BAA34BB699FB98D /* Media Player.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Media Player.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MediaPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -117,6 +125,7 @@
 			children = (
 				B8C55E6BC275DB672915EAA0 /* ContentView.swift */,
 				5E78FAB5609E7D4BDDFD9CC8 /* Controls */,
+				48121CD96154B167FDDF341B /* Downloads */,
 				3369CBF188AA070E3779F133 /* MediaInfo */,
 				C5FB8185F520234D4303F8F4 /* Player */,
 				9D550322EA445E2522DC4D84 /* Settings */,
@@ -147,10 +156,19 @@
 			path = MediaInfo;
 			sourceTree = "<group>";
 		};
+		369DF41DA54CE9ECCD41B346 /* Downloads */ = {
+			isa = PBXGroup;
+			children = (
+				810A29C03C647B0C5702FCC0 /* DownloadManager.swift */,
+				D730773159AEA7B26F99158B /* YTDLP.swift */,
+			);
+			path = Downloads;
+			sourceTree = "<group>";
+		};
 		3FC077C42F5E39CC53E70DDF /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E5B3638C4BAA34BB699FB98D /* Media Player.app */,
+				E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -162,6 +180,15 @@
 				739FDC61A73C195BE8A18B3B /* SubtitleTranslationState.swift */,
 			);
 			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		48121CD96154B167FDDF341B /* Downloads */ = {
+			isa = PBXGroup;
+			children = (
+				68CE9EA9BBAC07FFCCE1F4EA /* DownloadFromURLView.swift */,
+				B8FA8996BF20C4D1EA30F403 /* DownloadsButton.swift */,
+			);
+			path = Downloads;
 			sourceTree = "<group>";
 		};
 		4966F4A6CC9B89348E636C97 /* App */ = {
@@ -176,12 +203,11 @@
 			isa = PBXGroup;
 			children = (
 				52F6B3A0FBB0FFED86E10BA7 /* ABLoopButton.swift */,
-				55FD0A7FA05A48817832FC78 /* AdjustmentsButton.swift */,
+				3F4EF868B7893F491069BC11 /* AdjustmentsPanel.swift */,
 				517731304A8354D1B86F4534 /* AirPlayButton.swift */,
 				47B37E3132ADFF312ABE3E05 /* PlaybackControlsBar.swift */,
-				DB4018277FF5629D537F9C39 /* PlaybackSpeedMenu.swift */,
 				3BA55D7BE7C938101D560358 /* ScrubberView.swift */,
-				0BECFC81DFDDDA40A08E8CA7 /* TrackMenuButton.swift */,
+				9250CAFAF43696BAEB888C5B /* SettingsMenuButton.swift */,
 				C2DE4C984D23BDE612D8B7CB /* VolumeControl.swift */,
 			);
 			path = Controls;
@@ -191,6 +217,7 @@
 			isa = PBXGroup;
 			children = (
 				4966F4A6CC9B89348E636C97 /* App */,
+				369DF41DA54CE9ECCD41B346 /* Downloads */,
 				F4C757CA05867ACC58A1BD9B /* Models */,
 				0FAC46B9B25B923DE83E34E4 /* Playback */,
 				16420A21480630CB71199123 /* Resources */,
@@ -230,8 +257,8 @@
 			children = (
 				5777D6160099F2E8A72A998D /* MPVVideoView.swift */,
 				7F69F0B5DCA19B4AB6EA6068 /* PlayerContainerView.swift */,
+				7E205E57D5A276BD9E0D9619 /* SubtitleOverlay.swift */,
 				AF6FAE6B78CEA0FD25F4542F /* TrackpadGestureCatcher.swift */,
-				6F7AA29D4C559F1F77C9A846 /* TranslatedSubtitleOverlay.swift */,
 				785CB6D7748F5943CBB0A631 /* VideoLayerView.swift */,
 			);
 			path = Player;
@@ -253,6 +280,7 @@
 				4C006E99B490A91F9BBE24D4 /* MediaTrack.swift */,
 				DFC842256D600E2CB13D2FFF /* PersistedSession.swift */,
 				CA3A6819C787DB607B98579E /* RemappableAction.swift */,
+				11DBA0DE54CDABBE795EF89C /* RollUpCaptions.swift */,
 				CD3E1EC9F83E8ADF8EB7417E /* SavedPlaylist.swift */,
 			);
 			path = Models;
@@ -276,7 +304,7 @@
 			packageProductDependencies = (
 			);
 			productName = MediaPlayer;
-			productReference = E5B3638C4BAA34BB699FB98D /* Media Player.app */;
+			productReference = E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -289,6 +317,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					A4A6670FE6DA8CFEBA780267 = {
+						DevelopmentTeam = F4P3T9JYP2;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -330,11 +359,14 @@
 			files = (
 				F7142FF4F8FAA43B3AC00D59 /* ABLoopButton.swift in Sources */,
 				3492F13AD4D5C67443C9C40D /* AVFoundationEngine.swift in Sources */,
-				50C9EEC5652BFD9B1BB9BBC4 /* AdjustmentsButton.swift in Sources */,
+				6B9D318122F661F1F49FA48B /* AdjustmentsPanel.swift in Sources */,
 				C2D6AF6F95B8D407C8D872C9 /* AirPlayButton.swift in Sources */,
 				28300FA54868772F3F4142B6 /* AppSettingsKeys.swift in Sources */,
 				473ED1DD6A872E34140EC692 /* ContentView.swift in Sources */,
 				482CE246061B16058BF33542 /* ControlButton.swift in Sources */,
+				38F7D0C3D7E2469395A0077F /* DownloadFromURLView.swift in Sources */,
+				7EEE67647FA1B91C3680DAA8 /* DownloadManager.swift in Sources */,
+				BA8905BE05616445A9CFDBE6 /* DownloadsButton.swift in Sources */,
 				0A7CDC85F8F2970340407C9A /* MPVEngine.swift in Sources */,
 				B793085401767FC229839086 /* MPVVideoView.swift in Sources */,
 				B157F7CEC7F4364ECBA5673D /* MediaInfoView.swift in Sources */,
@@ -345,25 +377,26 @@
 				4F071237EDB18B7F76840E91 /* PersistedSession.swift in Sources */,
 				3014C4F4567A9537C68E79F3 /* PlaybackControlsBar.swift in Sources */,
 				E72FBFE6C6ECA5CF58DEF2A5 /* PlaybackEngine.swift in Sources */,
-				BC8606EB700FC43C18A28BD8 /* PlaybackSpeedMenu.swift in Sources */,
 				C223A973C8E506B953813318 /* PlayerContainerView.swift in Sources */,
 				C0DE3A81280610DF512B8E66 /* PlayerViewModel.swift in Sources */,
 				A452D5FD2B04AC7BCD3E72C8 /* PlaylistSidebarView.swift in Sources */,
 				6DCED9F1CBEFFA10EE168BAE /* RemappableAction.swift in Sources */,
+				320AFB2D74EA027BA790B3FC /* RollUpCaptions.swift in Sources */,
 				49A888549CABEB579494C965 /* SavePlaylistNameView.swift in Sources */,
 				12744E5EB123ECD75B41EE32 /* SavedPlaylist.swift in Sources */,
 				2B6BE2819183C8DB6B3D8AC1 /* ScrubberView.swift in Sources */,
+				0489B6BA9963757F972E376E /* SettingsMenuButton.swift in Sources */,
 				495288AD875FBE33E30C6886 /* SettingsView.swift in Sources */,
 				0436066502A4ED40DD311DE4 /* ShortcutsSettingsView.swift in Sources */,
+				1934404976FC63C2801F47A3 /* SubtitleOverlay.swift in Sources */,
 				B82DDD3F7792F698492D9821 /* SubtitleTranslationState.swift in Sources */,
 				A1F8F53C3E0FF83365F327B2 /* TimeFormatter.swift in Sources */,
-				DFAC0C09995A169B2D9CF50A /* TrackMenuButton.swift in Sources */,
 				1C9FF13DF2D85E6045407BDF /* TrackpadGestureCatcher.swift in Sources */,
-				ADBFC05D904D43DDEF4A9A1B /* TranslatedSubtitleOverlay.swift in Sources */,
 				C8FFC668CF6925C5BA0F244C /* VideoLayerView.swift in Sources */,
 				C728F9BC94FF20B4C14EBB48 /* VisualEffectView.swift in Sources */,
 				7575F225AF21D45D135248AE /* VolumeControl.swift in Sources */,
 				8005D408648083CD463C4B1B /* WindowAccessor.swift in Sources */,
+				D7451BDEFB9143F9CDE40CF6 /* YTDLP.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -406,7 +439,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = F4P3T9JYP2;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -443,34 +476,27 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/MediaPlayer/Resources/MediaPlayer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = F4P3T9JYP2;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
-				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readonly;
-				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readonly;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = /opt/homebrew/include;
+				HEADER_SEARCH_PATHS = (
+					/opt/homebrew/include,
+				);
 				INFOPLIST_FILE = Sources/MediaPlayer/Resources/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/mpv/lib;
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/mpv/lib,
+				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = "-lmpv";
-				OTHER_SWIFT_FLAGS = "-Xcc -DGL_SILENCE_DEPRECATION";
+				OTHER_LDFLAGS = (
+					"-lmpv",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"-Xcc",
+					"-DGL_SILENCE_DEPRECATION",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.masonkimball.MediaPlayer;
 				PRODUCT_NAME = "Media Player";
 				SDKROOT = macosx;
@@ -514,7 +540,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = F4P3T9JYP2;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -544,34 +570,27 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/MediaPlayer/Resources/MediaPlayer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = F4P3T9JYP2;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
-				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readonly;
-				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readonly;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = /opt/homebrew/include;
+				HEADER_SEARCH_PATHS = (
+					/opt/homebrew/include,
+				);
 				INFOPLIST_FILE = Sources/MediaPlayer/Resources/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/mpv/lib;
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/mpv/lib,
+				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = "-lmpv";
-				OTHER_SWIFT_FLAGS = "-Xcc -DGL_SILENCE_DEPRECATION";
+				OTHER_LDFLAGS = (
+					"-lmpv",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"-Xcc",
+					"-DGL_SILENCE_DEPRECATION",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.masonkimball.MediaPlayer;
 				PRODUCT_NAME = "Media Player";
 				SDKROOT = macosx;

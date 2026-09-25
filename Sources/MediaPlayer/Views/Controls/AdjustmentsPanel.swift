@@ -2,37 +2,10 @@ import AppKit
 import SwiftUI
 import Translation
 
-/// Video color adjustments + (when the active engine supports it) subtitle appearance,
-/// tucked behind one toolbar icon and a popover rather than a permanent bank of sliders —
-/// same reasoning as TrackMenuButton keeping the audio/subtitle picker off the main bar.
-struct AdjustmentsButton: View {
-    @ObservedObject var viewModel: PlayerViewModel
-
-    @State private var isHovering = false
-    @State private var showingPopover = false
-
-    var body: some View {
-        Button {
-            showingPopover = true
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white.opacity(0.92))
-                .frame(width: 29, height: 29)
-                .background(Circle().fill(Color.white.opacity(isHovering ? 0.16 : 0)))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        .disabled(viewModel.currentItem == nil)
-        .help("Video \u{0026} Subtitle Adjustments")
-        .popover(isPresented: $showingPopover, arrowEdge: .top) {
-            AdjustmentsPopoverContent(viewModel: viewModel)
-        }
-    }
-}
-
-private struct AdjustmentsPopoverContent: View {
+/// Video color adjustments, subtitle appearance (when the active engine supports it), and
+/// subtitle translation. Shown in a popover from the settings gear's "Video & Subtitle
+/// Adjustments" item rather than as a permanent bank of sliders.
+struct AdjustmentsPanel: View {
     @ObservedObject var viewModel: PlayerViewModel
 
     /// A representative set, not exhaustive — mpv accepts any iconv-recognized charset
@@ -99,6 +72,9 @@ private struct AdjustmentsPopoverContent: View {
 
             Section {
                 Toggle("Translate subtitles", isOn: $viewModel.translateSubtitles)
+                if viewModel.translateSubtitles {
+                    TranslationStatusLabel(state: viewModel.subtitleTranslation)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Picker("Translate to", selection: $viewModel.subtitleTranslationTarget) {
                         ForEach(targetLanguageOptions, id: \.identifier) { option in
@@ -147,6 +123,27 @@ private struct AdjustmentsPopoverContent: View {
             Text("\(Int(value.wrappedValue))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Observes the translation state directly — the popover's own view model observation
+/// doesn't see it, since translation state lives on its own object.
+private struct TranslationStatusLabel: View {
+    @ObservedObject var state: SubtitleTranslationState
+
+    var body: some View {
+        Text(description)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private var description: String {
+        switch state.status {
+        case .waitingForSubtitles: return "Status: waiting for subtitle text"
+        case .translating: return "Status: translating\u{2026}"
+        case .translated(let source): return "Status: translating from \(source)"
+        case .failed(let reason): return "Status: couldn't translate \u{2014} \(reason)"
         }
     }
 }

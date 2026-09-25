@@ -31,6 +31,13 @@ enum AppSettingsKeys {
     static let autoDoNotDisturb = "autoDoNotDisturb"
     static let focusOnShortcutName = "focusOnShortcutName"
     static let focusOffShortcutName = "focusOffShortcutName"
+    static let showsRemainingTime = "showsRemainingTime"
+    static let downloadFolderBookmark = "downloadFolderBookmark"
+    static let downloadKind = "downloadKind"
+    static let downloadVideoFormat = "downloadVideoFormat"
+    static let downloadAudioFormat = "downloadAudioFormat"
+    static let downloadSubtitleSaving = "downloadSubtitleSaving"
+    static let downloadAddsToPlaylist = "downloadAddsToPlaylist"
 }
 
 enum AppSettingsDefaults {

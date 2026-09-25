@@ -1,6 +1,6 @@
 ## v1.3.0
 
-This release adds a home screen, on-device subtitle translation, new audio, video, and subtitle controls, trackpad and menu bar integration, and a number of reliability fixes.
+This release adds a home screen, downloading from a link, on-device subtitle translation, new audio, video, and subtitle controls, trackpad and menu bar integration, and a number of reliability fixes.
 
 ### Home Screen
 
@@ -10,6 +10,13 @@ This release adds a home screen, on-device subtitle translation, new audio, vide
 - The entry for the file that's currently playing shows its live position
 - Remove entries from Continue Watching and delete saved playlists directly from the list
 - Shown automatically when the playlist is empty
+
+### Download from URL
+
+- Download a video or its audio from YouTube or any other site yt-dlp supports (File > Download from URL, Shift+Cmd+D)
+- Choose MP4 or MKV at a maximum resolution, or audio only as M4A, MP3, Opus, FLAC, or WAV
+- Pick subtitles to download with it, including automatic captions and YouTube's translations, saved as separate files, embedded in the video, or both
+- Downloads run in the background, with progress and controls in the toolbar, and can be added to the playlist automatically when finished
 
 ### Playback and Library
 
@@ -26,9 +33,11 @@ This release adds a home screen, on-device subtitle translation, new audio, vide
 - Subtitle font, text color, and background color and opacity (MKV/AVI/etc.)
 - Subtitle text encoding selection, for subtitles that display as garbled characters (MKV/AVI/etc.)
 - Subtitle translation into your chosen language, performed on-device with Apple's Translation framework (text-based subtitle tracks)
+- Subtitles move up above the controls bar while it's showing, so they're never hidden behind it
 
 ### Interface and macOS Integration
 
+- A redesigned controls bar, inspired by YouTube's player: a full-width scrubber over a gradient that fades up from the bottom, an elapsed / total time readout with the current chapter name (click it to show time remaining), a one-click CC button, and a settings gear that gathers subtitles, audio track, chapters, playback speed, and video adjustments
 - A Now Playing item in the menu bar, with play/pause and next/previous track controls
 - A filter field for searching the playlist
 - Remappable single-key shortcuts (Settings > Shortcuts)
@@ -48,10 +57,20 @@ This release adds a home screen, on-device subtitle translation, new audio, vide
 - Improved reliability of file access in long sessions that repeatedly switch playlists or reopen recent files
 - Fixed a launch failure ("different Team IDs") when loading the mpv library under Hardened Runtime
 - Improved stability of the mpv engine's startup and end-of-file handling
-- Fixed a possible hang when opening the captions menu for MP4, MOV, and other AVFoundation-backed files
+- Fixed a crash when loading an external subtitle file into an MKV/AVI/etc. file
+- Loading a subtitle file into an MKV/AVI/etc. file no longer switches playback to audio only
+- Fixed a freeze when loading a subtitle file for a video stored in Documents or another protected folder
+- YouTube's automatic captions now show one line at a time, instead of the current and previous lines stacked together
+- The home screen's list no longer draws over the window's top bar when scrolled
+- MKV/AVI/etc. files now reliably resume from where you left off
+- Fixed a possible hang when opening the subtitles menu for MP4, MOV, and other AVFoundation-backed files
+- Opening a file from Finder no longer adds it to the playlist several times or opens hidden duplicate windows
+- Keyboard shortcuts now work right after launch, instead of typing into the playlist filter until something else was clicked
+- Subtitles in MP4, MOV, and other AVFoundation-backed files appear as soon as they're turned on, and hidden "forced only" tracks are no longer listed or shown as selected
 - Playback time updates no longer redraw the entire interface
 
 ### Requirements
 
 - macOS 26 or later, Apple Silicon
 - Building from source requires [Homebrew](https://brew.sh) (`brew install mpv xcodegen`); see the README for details
+- Download from URL requires yt-dlp (`brew install yt-dlp`)

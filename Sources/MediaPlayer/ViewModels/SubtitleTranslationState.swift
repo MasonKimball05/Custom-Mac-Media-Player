@@ -1,7 +1,7 @@
 import Foundation
 import Translation
 
-/// The subtitle line on screen right now and its translation. Kept off PlayerViewModel for
+/// The subtitle line on screen right now and, when translating, its translation. Kept off PlayerViewModel for
 /// the same reason as PlaybackClock: lines change every few seconds, and only the subtitle
 /// overlay needs to redraw when they do — not the whole window and its open menus.
 ///
@@ -11,18 +11,41 @@ import Translation
 /// to `translate(_:using:)`.
 @MainActor
 final class SubtitleTranslationState: ObservableObject {
-    /// What the overlay shows: the translation of the current line, or nil for no line.
-    @Published private(set) var displayedText: String?
+    enum Status: Equatable {
+        /// No subtitle text has arrived since translation started or the file loaded —
+        /// usually no subtitle track is on, or the track is image-based.
+        case waitingForSubtitles
+        case translating
+        /// Carries the detected source language's display name.
+        case translated(from: String)
+        case failed(String)
+    }
 
-    private var sourceText: String?
+    /// What the overlay shows while translating: the translated line, the original while a
+    /// slow translation is pending or after one fails, or nil between lines.
+    @Published private(set) var displayedText: String?
+    @Published private(set) var status: Status = .waitingForSubtitles
+
+    /// The line as the engine reported it — what the overlay shows when it's drawing
+    /// subtitles without translating them (engines that can't reposition their own).
+    @Published private(set) var sourceText: String?
     private var cache: [String: String] = [:]
     private var continuation: AsyncStream<String?>.Continuation?
+
+    /// How long a translation can take before the original line is shown in its place, so a
+    /// slow translation (or one waiting on a language download) never leaves a blank gap.
+    private let originalTextFallbackDelay: Duration = .milliseconds(400)
 
     /// Called for every line the engine reports, translating or not, so turning translation
     /// on mid-line picks up the line that's already on screen.
     func update(sourceText: String?) {
         guard sourceText != self.sourceText else { return }
         self.sourceText = sourceText
+        // No line means nothing to show, right now — not after whatever translation is
+        // still in flight for the previous line finishes.
+        if sourceText == nil {
+            displayedText = nil
+        }
         continuation?.yield(sourceText)
     }
 
@@ -30,6 +53,7 @@ final class SubtitleTranslationState: ObservableObject {
     func reset() {
         sourceText = nil
         displayedText = nil
+        status = .waitingForSubtitles
         cache.removeAll()
     }
 
@@ -59,18 +83,33 @@ final class SubtitleTranslationState: ObservableObject {
             displayedText = cached
             return
         }
-        let result: String
+
+        status = .translating
+        let fallback = Task { [weak self, originalTextFallbackDelay] in
+            try? await Task.sleep(for: originalTextFallbackDelay)
+            guard let self, !Task.isCancelled, self.sourceText == text else { return }
+            self.displayedText = text
+        }
+        defer { fallback.cancel() }
+
         do {
-            result = try await session.translate(text).targetText
-            cache[text] = result
+            let response = try await session.translate(text)
+            cache[text] = response.targetText
+            let sourceName = Locale.current.localizedString(forIdentifier: response.sourceLanguage.minimalIdentifier)
+            status = .translated(from: sourceName ?? response.sourceLanguage.minimalIdentifier)
+            // The dialogue may have moved on while this was translating.
+            if text == sourceText {
+                displayedText = response.targetText
+            }
+        } catch is CancellationError {
+            // Translation was turned off or the target language changed mid-line.
         } catch {
             // Unsupported language pair, a declined download, or a line too short to
             // identify: showing the original beats showing nothing.
-            result = text
-        }
-        // The dialogue may have moved on while this was translating.
-        if text == sourceText {
-            displayedText = result
+            status = .failed(error.localizedDescription)
+            if text == sourceText {
+                displayedText = text
+            }
         }
     }
 }

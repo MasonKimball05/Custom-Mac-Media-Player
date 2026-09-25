@@ -5,12 +5,20 @@ import SwiftUI
 struct MediaPlayerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var viewModel = PlayerViewModel()
+    @StateObject private var downloads = DownloadManager()
     @AppStorage(AppSettingsKeys.skipInterval) private var skipInterval = AppSettingsDefaults.skipInterval
 
     var body: some Scene {
-        WindowGroup {
+        // A single window, not a WindowGroup. Every window would share this one view
+        // model (so they'd only ever show the same thing), and a WindowGroup opens a new
+        // window whenever a file launches the app from Finder, which macOS then restores
+        // on every later launch. Stacked exactly on top of each other they looked like
+        // one, but each reacted to "open this file", so one open added the file once per
+        // window, and mpv drew into whichever window it happened to pick.
+        Window("Media Player", id: "main") {
             ContentView()
                 .environmentObject(viewModel)
+                .environmentObject(downloads)
                 .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
@@ -31,6 +39,11 @@ struct MediaPlayerApp: App {
                     NotificationCenter.default.post(name: .openNetworkStream, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Button("Download from URL\u{2026}") {
+                    NotificationCenter.default.post(name: .downloadFromURL, object: nil)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
 
                 Menu("Open Recent") {
                     if viewModel.recentFiles.isEmpty {

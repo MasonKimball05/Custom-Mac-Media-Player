@@ -153,7 +153,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// line translated into `subtitleTranslationTarget` instead.
     @Published var translateSubtitles: Bool = AppSettingsDefaults.translateSubtitles {
         didSet {
-            applySubtitleTranslationMode()
+            applySubtitleRenderingMode()
             UserDefaults.standard.set(translateSubtitles, forKey: AppSettingsKeys.translateSubtitles)
         }
     }
@@ -292,6 +292,33 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         newItems.forEach(recordRecentFile)
     }
 
+    /// Adds files to the end of the queue without interrupting whatever is playing (only
+    /// starts playback when nothing is loaded). For files that show up in the background,
+    /// like a finished download.
+    func enqueueFiles(_ urls: [URL]) {
+        let newItems = urls
+            .filter { $0.isFileURL && !playlist.map(\.url).contains($0) }
+            .map { MediaItem(url: $0) }
+        guard let first = newItems.first else { return }
+
+        playlist.append(contentsOf: newItems)
+        if currentItem == nil {
+            play(item: first)
+        }
+        regenerateShuffleOrder()
+        persistSession()
+        newItems.forEach(recordRecentFile)
+    }
+
+    /// Plays a local file, reusing its queue entry if it's already in the playlist.
+    func playFile(_ url: URL) {
+        if let existing = playlist.first(where: { $0.url == url }) {
+            play(item: existing)
+        } else {
+            addFiles([url])
+        }
+    }
+
     /// Adds and immediately plays a direct stream URL (http/https/rtsp/etc.) rather than
     /// a local file — VLC's "Open Network Stream". Requires the network client
     /// entitlement, since this app is otherwise sandboxed to user-selected local files.
@@ -379,6 +406,10 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         currentTime = startPosition
         duration = 0
         bufferedFraction = 0
+        // Assume video until the engine says otherwise: mpv's video view has to be visible
+        // and draw once before mpv will load the file (see "Load sequencing" in MPVEngine),
+        // and the previous file being audio-only would otherwise leave it hidden.
+        isVideoTrackPresent = true
         loopPointA = nil
         loopPointB = nil
         chapters = []
@@ -399,7 +430,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         // instance, and that instance has never heard these values before.
         applyVideoAdjustments()
         applySubtitleAppearance()
-        applySubtitleTranslationMode()
+        applySubtitleRenderingMode()
         if startPosition > 0 { activeEngine.seek(to: startPosition) }
         if autoPlay {
             activeEngine.play()
@@ -626,8 +657,22 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         objectWillChange.send()
     }
 
+    /// Subtitles on (the first track) or off — the C key and the controls bar's CC button.
+    func toggleSubtitles() {
+        let tracks = availableSubtitleTracks()
+        if tracks.contains(where: \.isSelected) {
+            selectSubtitleTrack(id: nil)
+        } else if let first = tracks.first {
+            selectSubtitleTrack(id: first.id)
+        }
+    }
+
     func selectSubtitleTrack(id: String?) {
         activeEngine.selectSubtitleTrack(id: id)
+        // AVFoundation's legible output just stops calling back when its track is turned off
+        // or switched, rather than reporting "no line" — without this, the last translated
+        // line would stay on screen after choosing Off.
+        subtitleTranslation.update(sourceText: nil)
         objectWillChange.send()
     }
 
@@ -652,8 +697,26 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         )
     }
 
-    private func applySubtitleTranslationMode() {
-        activeEngine.setNativeSubtitleRenderingEnabled(!translateSubtitles)
+    /// Whether the player's overlay draws subtitles instead of the engine: always while
+    /// translating, and for an engine that can't move its own subtitles above the controls
+    /// bar (AVFoundation). Otherwise the engine draws them, which keeps styled subtitles intact.
+    var drawsSubtitlesInApp: Bool {
+        translateSubtitles || !currentEngineCapabilities.repositionableSubtitles
+    }
+
+    private func applySubtitleRenderingMode() {
+        activeEngine.setNativeSubtitleRenderingEnabled(!drawsSubtitlesInApp)
+        activeEngine.setSubtitleBottomInset(subtitleBottomInset)
+    }
+
+    /// Fraction of the video's height the controls bar currently covers (0 while hidden),
+    /// kept so it can be reapplied whenever playback moves to a different engine.
+    private var subtitleBottomInset: Double = 0
+
+    func setSubtitleBottomInset(_ fraction: Double) {
+        guard fraction != subtitleBottomInset else { return }
+        subtitleBottomInset = fraction
+        activeEngine.setSubtitleBottomInset(fraction)
     }
 
     private func applySubtitleAppearance() {
@@ -678,16 +741,17 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             isLoading = true
             duration = 0
             bufferedFraction = 0
+            isVideoTrackPresent = true
             mpvEngine.load(url: item.url)
             mpvEngine.setVolume(volume, muted: isMuted)
             mpvEngine.setRate(playbackRate)
-            applySubtitleTranslationMode()
+            applySubtitleRenderingMode()
             mpvEngine.seek(to: resumeTime)
             currentTime = resumeTime
             if wasPlaying { mpvEngine.play() } else { mpvEngine.pause() }
             isPlaying = wasPlaying
         }
-        mpvEngine.addExternalSubtitle(url: url)
+        mpvEngine.addExternalSubtitle(url: RollUpCaptions.playableURL(for: url))
         objectWillChange.send()
     }
 

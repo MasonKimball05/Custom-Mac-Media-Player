@@ -15,7 +15,8 @@ import Foundation
 final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     weak var delegate: PlaybackEngineDelegate?
     let capabilities = EngineCapabilities(
-        externalSubtitles: true, subtitleTiming: true, subtitleScaling: true, subtitleAppearance: true
+        externalSubtitles: true, subtitleTiming: true, subtitleScaling: true, subtitleAppearance: true,
+        repositionableSubtitles: true
     )
 
     /// Set by the video view once it has an OpenGL context ready; called on the main
@@ -51,6 +52,24 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         mpv_set_option_string(handle, "hwdec", "auto")
         mpv_set_option_string(handle, "keep-open", "yes")
         mpv_set_option_string(handle, "osc", "no")
+        // mpv's other built-in Lua scripts are its own UI (stats overlay, console, menus) or
+        // yt-dlp integration. None are reachable here, with input bindings off and the app
+        // drawing its own controls. Turning them off also means no Lua (and so no LuaJIT
+        // JIT) runs at all, which is what crashed under Hardened Runtime.
+        for script in ["load-scripts", "load-stats-overlay", "load-console", "load-osd-console",
+                       "load-auto-profiles", "load-select", "load-positioning", "load-commands",
+                       "load-context-menu", "ytdl"] {
+            mpv_set_option_string(handle, script, "no")
+        }
+        // mpv looks for subtitle, audio, and cover-art files next to the video by default.
+        // Inside the App Sandbox that can't work (the app can read only the files it was
+        // given, not their neighbors), and the attempt was worse than useless: listing a
+        // folder in ~/Documents made macOS ask for access to Documents, and mpv's core
+        // waited on that question, freezing the app on its next call into mpv. Subtitle
+        // files are loaded explicitly instead (Load Subtitle File).
+        for scan in ["sub-auto", "audio-file-auto", "cover-art-auto"] {
+            mpv_set_option_string(handle, scan, "no")
+        }
         mpv_set_option_string(handle, "input-default-bindings", "no")
         mpv_set_option_string(handle, "input-vo-keyboard", "no")
         mpv_set_option_string(handle, "input-cursor", "no")
@@ -81,6 +100,26 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     // MARK: PlaybackEngine
 
+    // MARK: Load sequencing
+    //
+    // mpv loads files asynchronously, and two things go wrong if the app doesn't wait for it
+    // (both confirmed against libmpv directly):
+    // - Starting a file before the video view has created the render context makes mpv
+    //   turn video off for that file (vid=no) and never turn it back on: audio only, and no
+    //   subtitles either, since mpv draws those into the video.
+    // - "seek" and "sub-add" fail with "error running command" until the file has loaded,
+    //   so a resume position or an external subtitle requested right after loading was lost.
+    // So a load waits for the render context, and file-dependent commands wait for FILE_LOADED.
+
+    /// The path/URL most recently asked for — used to ignore a late FILE_LOADED from a
+    /// previous file, which would otherwise flush this file's pending commands early.
+    private var currentLoadTarget: String?
+    /// Waiting for the render context before it's actually handed to mpv.
+    private var pendingLoadTarget: String?
+    private var isFileLoaded = false
+    private var pendingSeek: Double?
+    private var pendingSubtitlePaths: [String] = []
+
     func load(url: URL) {
         guard let handle else { return }
 
@@ -96,6 +135,30 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         // this engine) needs the full URL string, or mpv tries to open the bare path as
         // a nonexistent local file. Same distinction the M3U export code already makes.
         let target = url.isFileURL ? url.path : url.absoluteString
+        currentLoadTarget = target
+        isFileLoaded = false
+        pendingSeek = nil
+        pendingSubtitlePaths = []
+
+        guard renderContext != nil else {
+            pendingLoadTarget = target
+            // The video view normally creates the render context on its first draw, within
+            // a frame or two. If it somehow never draws (a hidden window), load anyway after
+            // a moment: audio-only playback beats nothing happening at all.
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, self.pendingLoadTarget == target else { return }
+                self.pendingLoadTarget = nil
+                self.loadFile(target)
+            }
+            return
+        }
+        pendingLoadTarget = nil
+        loadFile(target)
+    }
+
+    private func loadFile(_ target: String) {
+        guard let handle else { return }
         target.withCString { pathPtr in
             "loadfile".withCString { cmdPtr in
                 "replace".withCString { modePtr in
@@ -116,6 +179,10 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     func seek(to seconds: Double) {
         guard let handle else { return }
+        guard isFileLoaded else {
+            pendingSeek = seconds
+            return
+        }
         String(format: "%.3f", seconds).withCString { valuePtr in
             "seek".withCString { cmdPtr in
                 "absolute".withCString { modePtr in
@@ -127,29 +194,44 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     }
 
     func setVolume(_ volume: Float, muted: Bool) {
-        guard let handle else { return }
-        var value = muted ? 0.0 : Double(volume) * 100.0
-        mpv_set_property(handle, "volume", MPV_FORMAT_DOUBLE, &value)
+        setDoubleProperty("volume", muted ? 0.0 : Double(volume) * 100.0)
     }
 
     func setRate(_ rate: Float) {
-        guard let handle else { return }
-        var value = Double(rate)
-        mpv_set_property(handle, "speed", MPV_FORMAT_DOUBLE, &value)
+        setDoubleProperty("speed", Double(rate))
     }
 
     func stop() {
         guard let handle else { return }
+        currentLoadTarget = nil
+        pendingLoadTarget = nil
+        isFileLoaded = false
+        pendingSeek = nil
+        pendingSubtitlePaths = []
         "stop".withCString { cmdPtr in
             var args: [UnsafePointer<CChar>?] = [cmdPtr, nil]
             mpv_command(handle, &args)
         }
     }
 
+    // The setters below use mpv's asynchronous API. The synchronous one waits for mpv's
+    // core thread, and they're called from the main thread in response to the UI (the
+    // controls bar showing or hiding moves the subtitles, for one), so any moment the core
+    // is busy, a slow network stream, say, would freeze the app. mpv copies the value
+    // before returning and applies requests in the order they were made.
+
     private func setFlag(_ name: String, _ value: Bool) {
         guard let handle else { return }
         var flag: Int32 = value ? 1 : 0
-        mpv_set_property(handle, name, MPV_FORMAT_FLAG, &flag)
+        mpv_set_property_async(handle, 0, name, MPV_FORMAT_FLAG, &flag)
+    }
+
+    private func setStringProperty(_ name: String, _ value: String) {
+        guard let handle else { return }
+        value.withCString { valuePtr in
+            var string: UnsafePointer<CChar>? = valuePtr
+            _ = mpv_set_property_async(handle, 0, name, MPV_FORMAT_STRING, &string)
+        }
     }
 
     // MARK: Tracks
@@ -174,18 +256,24 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     }
 
     func selectAudioTrack(id: String?) {
-        guard let handle else { return }
-        mpv_set_property_string(handle, "aid", id ?? "auto")
+        setStringProperty("aid", id ?? "auto")
     }
 
     func selectSubtitleTrack(id: String?) {
-        guard let handle else { return }
-        mpv_set_property_string(handle, "sid", id ?? "no")
+        setStringProperty("sid", id ?? "no")
     }
 
     func addExternalSubtitle(url: URL) {
+        guard isFileLoaded else {
+            pendingSubtitlePaths.append(url.path)
+            return
+        }
+        addSubtitleFile(atPath: url.path)
+    }
+
+    private func addSubtitleFile(atPath path: String) {
         guard let handle else { return }
-        url.path.withCString { pathPtr in
+        path.withCString { pathPtr in
             "sub-add".withCString { cmdPtr in
                 "select".withCString { modePtr in
                     var args: [UnsafePointer<CChar>?] = [cmdPtr, pathPtr, modePtr, nil]
@@ -213,14 +301,13 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     func setSubtitleAppearance(
         fontName: String, textColorHex: String, backgroundColorHex: String, backgroundOpacity: Double, codepage: String
     ) {
-        guard let handle else { return }
-        mpv_set_property_string(handle, "sub-font", fontName.isEmpty ? "" : fontName)
-        mpv_set_property_string(handle, "sub-color", mpvColorString(hex: textColorHex, opacity: 1))
+        setStringProperty("sub-font", fontName.isEmpty ? "" : fontName)
+        setStringProperty("sub-color", mpvColorString(hex: textColorHex, opacity: 1))
         // Fully transparent background reads as "no box" — mpv still wants a color, just
         // with alpha 0, rather than a way to omit the back-color box entirely.
-        mpv_set_property_string(handle, "sub-back-color", mpvColorString(hex: backgroundColorHex, opacity: backgroundOpacity))
+        setStringProperty("sub-back-color", mpvColorString(hex: backgroundColorHex, opacity: backgroundOpacity))
 
-        mpv_set_property_string(handle, "sub-codepage", codepage.isEmpty ? "auto" : codepage)
+        setStringProperty("sub-codepage", codepage.isEmpty ? "auto" : codepage)
         // Setting the property alone doesn't retroactively re-decode subtitles mpv already
         // parsed with the old (wrong) charset guess. The obvious fix — the "sub-reload"
         // command — turns out to only work for external subtitle *files*; its own docs say
@@ -229,13 +316,21 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         // either way, which does pick up a codepage change on an already-loaded file,
         // embedded or external.
         if let currentSid = getStringProperty("sid"), currentSid != "no" {
-            mpv_set_property_string(handle, "sid", "no")
-            mpv_set_property_string(handle, "sid", currentSid)
+            setStringProperty("sid", "no")
+            setStringProperty("sid", currentSid)
         }
     }
 
     func setNativeSubtitleRenderingEnabled(_ enabled: Bool) {
         setFlag("sub-visibility", enabled)
+    }
+
+    /// `sub-pos` is the subtitle's vertical position in percent of the video's height, 100
+    /// being mpv's normal spot. Moving it rather than drawing subtitles in the app keeps
+    /// styled (ASS) subtitles looking the way they were authored.
+    func setSubtitleBottomInset(_ fraction: Double) {
+        let position = Int((100 - max(0, min(1, fraction)) * 100).rounded())
+        setStringProperty("sub-pos", String(position))
     }
 
     /// mpv color options take "#RRGGBB" or "#AARRGGBB" — folds a separate 0...1 opacity
@@ -359,7 +454,7 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     private func setDoubleProperty(_ name: String, _ value: Double) {
         guard let handle else { return }
         var v = value
-        mpv_set_property(handle, name, MPV_FORMAT_DOUBLE, &v)
+        mpv_set_property_async(handle, 0, name, MPV_FORMAT_DOUBLE, &v)
     }
 
     // MARK: Rendering (called from MPVVideoView, always on the main thread)
@@ -385,6 +480,11 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
                 renderContext = newContext
                 mpv_render_context_set_update_callback(newContext, mpvRenderUpdateTrampoline, Unmanaged.passUnretained(self).toOpaque())
             }
+        }
+        // A file asked for before this existed — see "Load sequencing".
+        if renderContext != nil, let target = pendingLoadTarget {
+            pendingLoadTarget = nil
+            loadFile(target)
         }
     }
 
@@ -502,6 +602,17 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     private func handleFileLoaded() {
         guard let handle else { return }
+        // A FILE_LOADED for the previous file can still be in flight after a new load(url:).
+        guard let expected = currentLoadTarget, getStringProperty("path") == expected else { return }
+
+        isFileLoaded = true
+        if let seconds = pendingSeek {
+            pendingSeek = nil
+            seek(to: seconds)
+        }
+        let subtitles = pendingSubtitlePaths
+        pendingSubtitlePaths = []
+        subtitles.forEach(addSubtitleFile(atPath:))
 
         var duration: Double = 0
         if mpv_get_property(handle, "duration", MPV_FORMAT_DOUBLE, &duration) >= 0, duration > 0 {

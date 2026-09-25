@@ -4,8 +4,12 @@ I don't like QuickTime so I'm making my own.
 
 A native macOS media player (SwiftUI + AVFoundation, with libmpv for anything
 AVFoundation can't open) with fully custom playback chrome instead of the
-stock QuickTime/AVPlayerView controls: a scrubber with buffered-range and
-hover time preview, a slide-out volume control, playback speed menu,
+stock QuickTime/AVPlayerView controls, laid out like YouTube's player: a
+full-width scrubber with buffered-range and hover time preview over a
+gradient that fades up from the bottom, an elapsed / total time readout
+with the current chapter (click it for time remaining), a one-click CC
+toggle, a settings gear for subtitles, audio track, chapters, playback
+speed, and video adjustments, a slide-out volume control,
 configurable skip interval, shuffle + repeat-all/one, a reorderable
 multi-select playlist sidebar (click to select, ⌘-click to toggle, ⇧-click
 for a range, Select All, Delete/Backspace or right-click to remove, drag any
@@ -37,8 +41,8 @@ it re-selects the current track — see `setSubtitleAppearance` in
 
 ### Subtitle translation
 
-Turn it on from the captions menu (Subtitles ▸ Translate Subtitles) or the
-sliders popover, which also sets the target language (defaults to your
+Turn it on from the settings gear (Subtitles ▸ Translate Subtitles) or the
+gear's Video & Subtitle Adjustments panel, which also sets the target language (defaults to your
 system language). It works with both engines and translates on-device, using
 Apple's Translation framework:
 
@@ -47,8 +51,13 @@ Apple's Translation framework:
   `AVPlayerItemLegibleOutput`. While translation is on, the engine's own
   subtitle rendering is turned off (`sub-visibility`,
   `suppressesPlayerRendering`) and
-  [TranslatedSubtitleOverlay.swift](Sources/MediaPlayer/Views/Player/TranslatedSubtitleOverlay.swift)
+  [SubtitleOverlay.swift](Sources/MediaPlayer/Views/Player/SubtitleOverlay.swift)
   draws the translated line instead.
+- The legible output's delegate method has to be marked `@objc` explicitly.
+  It's an *optional* protocol method, and Swift doesn't infer `@objc` for one
+  on a `private` class, so without the attribute AVFoundation never finds it
+  and no subtitle text ever arrives. Nothing fails loudly; the overlay just
+  stays empty.
 - The session comes from SwiftUI's `.translationTask`, the variant that
   detects the source language on its own and asks macOS to download a
   language pair the first time it's needed. If a line can't be translated (an
@@ -177,6 +186,56 @@ Shortcuts.app (default names "Focus On" / "Focus Off", configurable in
 Settings), each with a single "Set Focus" action turning a Focus mode on or
 off. Without those shortcuts existing, the toggle just quietly does nothing.
 
+### Download from URL (yt-dlp)
+
+File ▸ Download from URL (Shift-Command-D) saves a video or its audio from
+any site [yt-dlp](https://github.com/yt-dlp/yt-dlp) supports. Paste a link,
+and the next step shows the video's details and asks:
+
+- **Video or audio only.** Video comes as MP4 (H.264, which plays in any
+  app and gets thumbnails and AirPlay here) or MKV (the highest quality the
+  site has, including 4K and HDR), at a chosen maximum resolution. MP4
+  resolutions are limited to what the site offers in H.264 (1080p on
+  YouTube); a site with no H.264 at all falls back to MKV. Audio comes as
+  M4A, MP3, Opus, FLAC, or WAV, with cover art where the format holds it.
+- **Subtitles.** Uploaded tracks, the automatic captions in the spoken
+  language, and (collapsed, with a filter) YouTube's machine translations.
+  They're saved as `.srt` files, embedded in the video, or both.
+- **Where to save.** Chosen once and remembered (security-scoped bookmark),
+  optionally adding each finished file to the playlist without interrupting
+  what's playing.
+
+Downloads run in the background. A toolbar button with a progress ring
+opens the list, with cancel, play, and Show in Finder.
+
+How it's put together
+([Downloads/](Sources/MediaPlayer/Downloads)):
+
+- yt-dlp isn't bundled. The app runs Homebrew's copy
+  (`brew install yt-dlp`), which stays current with `brew upgrade`. That
+  matters because sites change often enough that an old yt-dlp stops working.
+  It needs ffmpeg for merging and conversion, which Homebrew's mpv already
+  installs.
+- A child process inherits the app's sandbox, and `/opt/homebrew` doesn't
+  exist inside it. The
+  `com.apple.security.temporary-exception.files.absolute-path.read-only`
+  entitlement for `/opt/homebrew/` (in `project.yml`) makes it readable
+  and executable. PATH is set explicitly, because an app launched from Finder
+  doesn't have Homebrew on it, and yt-dlp finds ffmpeg and deno (for
+  YouTube's player challenges) through it.
+- yt-dlp writes into a scratch folder in the app's container, and the app
+  moves the finished files into the chosen folder itself. The grant for
+  that folder belongs to the app's process, and cancelled or failed
+  downloads never leave partial files behind. On a name clash, the video and
+  its subtitles are renamed together so they still pair up.
+- Progress comes from `--progress-template`, parsed line by line
+  (`DownloadProgressLine`). The user's own yt-dlp config is ignored
+  (`--ignore-config`) so the sheet's choices are what actually happens.
+- Licensing: yt-dlp is released under the Unlicense (public domain), and
+  it runs as a separate program rather than being linked in, so it places no
+  conditions on this app. The usual caveat applies to what's downloaded:
+  respect the site's terms and the content's copyright.
+
 ### Multiple playlists / export
 
 The menu at the top of the sidebar (click the playlist name) covers two
@@ -209,6 +268,7 @@ requiring it), plus [Homebrew](https://brew.sh).
 
 ```bash
 brew install mpv   # provides libmpv — see "MKV/AVI/etc. playback" below
+brew install yt-dlp   # optional, for Download from URL
 open MediaPlayer.xcodeproj
 ```
 
@@ -280,11 +340,82 @@ allows loading libraries signed with the app's own Team ID, and Homebrew's
 build is signed under a different one. Without that entitlement the app fails
 at launch with a dyld "different Team IDs" error for that library.
 
+mpv's built-in Lua scripts (stats overlay, console, and so on) run on LuaJIT,
+which needs `com.apple.security.cs.allow-jit` under Hardened Runtime.
+Without it, the first time a script's JIT compiles code (loading a
+subtitle file was enough to trigger it), the kernel kills the app with
+"Code Signature Invalid". The entitlement is set in `project.yml`, and the
+scripts the app doesn't use are also switched off in `MPVEngine`'s setup
+(the `load-*` options and `ytdl`).
+
+`loadfile` in mpv is asynchronous, which matters for anything done right
+after opening a file. `sub-add` and `seek` both fail until mpv reports
+`FILE_LOADED`, and if the file is loaded before the video view's render
+context exists, mpv decides there's no video output and plays the file as
+audio-only for good. `MPVEngine.load(url:)` therefore waits for the render
+context, and queues seeks (resume positions) and external subtitle files
+until the file has loaded (`handleFileLoaded()`).
+
+mpv's automatic search for subtitle, audio, and cover-art files next to the
+video (`sub-auto`, `audio-file-auto`, `cover-art-auto`) is turned off. In the
+sandbox the app can read only the files it was given, not their neighbors, and
+listing a folder in `~/Documents` made macOS ask for access to Documents while
+mpv's core thread waited on the answer. The app's calls into mpv from the UI
+also use mpv's asynchronous API (`mpv_set_property_async`), so a busy core
+thread can't freeze the app. Moving the subtitles whenever the controls bar
+showed or hid was what turned that wait into a hang.
+
+### Subtitles stay above the controls
+
+While the controls bar is showing, subtitles move up so the bar doesn't cover
+them. `PlayerContainerView` measures the bar and the video area and passes
+the covered fraction to the engine. mpv moves its own subtitles with
+`sub-pos`. AVFoundation has no equivalent, so for those files the app draws
+the subtitle itself: the player's rendering is suppressed and `SubtitleOverlay`
+draws the line reported by the legible output, the same path translation
+uses (see `PlayerViewModel.drawsSubtitlesInApp`).
+
 These formats are also registered as custom Uniform Type Identifiers in
 `project.yml`'s `CFBundleDocumentTypes`/`UTExportedTypeDeclarations` (macOS
 doesn't ship system UTIs for most of them), so double-clicking or right-click
 ▸ Open With ▸ Media Player works from Finder the same as it does for
 mp4/mov — not just opening them from inside the app.
+
+### One window
+
+The main scene is a single `Window`, not a `WindowGroup`. A `WindowGroup`
+opens a new window whenever a file launches the app from Finder (Open With,
+double-click), and macOS restores every one of them on later launches. They
+all shared the one `PlayerViewModel`, stacked exactly on top of each other,
+so it looked like a single window. But each one reacted to the "open this
+file" notification, so one open added the file once per window, and mpv drew
+into whichever window's view it happened to pick (a black video).
+
+### YouTube's automatic captions
+
+YouTube's automatic captions scroll: each line stays up until the line after
+next begins, so as SRT files (which is how yt-dlp saves them) every cue
+overlaps the next, and players show two stacked lines, the current one and
+the one before it. [RollUpCaptions.swift](Sources/MediaPlayer/Models/RollUpCaptions.swift)
+ends each cue where the next one starts. It only does this when most cues
+overlap, so ordinary subtitles that briefly overlap on purpose (two people
+talking at once) are untouched. Loading a subtitle file plays a fixed copy
+from the app's temporary folder, leaving your file as it is. The downloader
+fixes the files it saves, so they also play properly in other players.
+
+### Forced subtitles and the legible output
+
+Two AVFoundation behaviors matter for the CC button and the subtitle overlay:
+
+- Each subtitle track comes with a "Forced" variant that only shows lines
+  marked forced (usually none), and AVFoundation selects it by default when
+  the system caption preference is off. `AVFoundationEngine` hides those
+  variants, so subtitles read as off, not as a selected track that shows
+  nothing.
+- `AVPlayerItemLegibleOutput` reports a line only when it starts, so a track
+  turned on partway through a line stayed blank until the next one.
+  Selecting a subtitle track now seeks in place, which makes AVFoundation
+  send the current line right away.
 
 ### Playback time is published separately
 
@@ -295,7 +426,7 @@ forward to it. Only views that actually display time observe the clock: the
 transport bar's time readout and scrubber, and the home screen's live
 Continue Watching row. When those ticks were published on the view model,
 every observer redrew at that rate, including the app's menu-bar commands and
-every ancestor of the captions and speed menus. The result was that any open
+every ancestor of the settings menu. The result was that any open
 menu flickered and dropped hovers and clicks for as long as something was
 playing. If a new view needs live time, observe `viewModel.clock` in that
 view (or a small subview), not the view model.
@@ -305,13 +436,15 @@ view (or a small subview), not the view model.
 ```
 Sources/MediaPlayer/
 ├── App/            App entry point, menu commands, menu-bar item, Finder "Open With" handling
+├── Downloads/      yt-dlp runner, download options, and the download manager
 ├── Models/         MediaItem, tracks/chapters, saved playlists, settings keys, remappable shortcuts
 ├── Playback/       PlaybackEngine protocol + the AVFoundation and mpv implementations
 ├── ViewModels/     PlayerViewModel (facade over the active engine) and PlaybackClock
 ├── Views/
 │   ├── Player/     Video surfaces, home screen, trackpad gestures, auto-hiding overlay chrome
-│   ├── Controls/   Scrubber, volume, speed, captions and adjustments menus, A–B loop, transport bar
+│   ├── Controls/   Scrubber, volume, settings gear menu, adjustments panel, A–B loop, transport bar
 │   ├── Sidebar/    Playlist
+│   ├── Downloads/  Download from URL sheet and the toolbar's downloads list
 │   ├── Settings/   Settings window, including the Shortcuts pane
 │   └── Shared/     Small reusable pieces (buttons, blur material, window bridge)
 └── Resources/      Info.plist, entitlements, asset catalog (app icon, accent color), mpv bridging header

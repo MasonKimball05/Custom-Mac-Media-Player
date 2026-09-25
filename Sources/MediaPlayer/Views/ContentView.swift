@@ -4,11 +4,13 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var viewModel: PlayerViewModel
+    @EnvironmentObject private var downloads: DownloadManager
     @State private var showSidebar = true
     @State private var isFullscreen = false
     @State private var window: NSWindow?
     @State private var showingNetworkStreamSheet = false
     @State private var showingMediaInfoSheet = false
+    @State private var showingDownloadSheet = false
     /// Owned here (not by PlayerContainerView) because hiding the window's toolbar —
     /// which is where the sidebar toggle lives — needs to react to it too.
     @State private var controlsVisible = true
@@ -52,6 +54,12 @@ struct ContentView: View {
         .background(WindowAccessor { resolvedWindow in
             window = resolvedWindow
             resolvedWindow.level = floatOnTop ? .floating : .normal
+            // AppKit gives a new window's first text field (the playlist filter) keyboard
+            // focus, which swallowed Space, C, and the other single-key shortcuts until
+            // something else was clicked. Nothing should have focus until it's clicked.
+            DispatchQueue.main.async {
+                resolvedWindow.makeFirstResponder(nil)
+            }
             observeFullscreen(resolvedWindow)
         })
         .onChange(of: floatOnTop) { _, newValue in
@@ -81,6 +89,11 @@ struct ContentView: View {
                 .help("Home")
                 .disabled(viewModel.currentItem == nil)
             }
+            if !downloads.jobs.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    DownloadsButton(downloads: downloads, onPlay: viewModel.playFile)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     floatOnTop.toggle()
@@ -106,6 +119,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openNetworkStream)) { _ in
             showingNetworkStreamSheet = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .downloadFromURL)) { _ in
+            showingDownloadSheet = true
+        }
         .onReceive(NotificationCenter.default.publisher(for: .showMediaInfo)) { _ in
             showingMediaInfoSheet = true
         }
@@ -118,6 +134,9 @@ struct ContentView: View {
         .sheet(isPresented: $showingMediaInfoSheet) {
             MediaInfoView(viewModel: viewModel)
         }
+        .sheet(isPresented: $showingDownloadSheet) {
+            DownloadFromURLView(downloads: downloads)
+        }
         .frame(minWidth: 720, minHeight: 420)
         // SwiftUI's .onKeyPress only fires on a *focused* view, and getting a plain
         // container view reliably focused (and staying that way across sheets, the video
@@ -126,6 +145,7 @@ struct ContentView: View {
         // sees every key event in the app regardless of SwiftUI's focus state, so it isn't
         // subject to the same problem.
         .onAppear {
+            downloads.onAddToPlaylist = { viewModel.enqueueFiles([$0]) }
             keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 handleGlobalKeyEvent(event) ? nil : event
             }
@@ -267,7 +287,7 @@ struct ContentView: View {
         if key == bindings[.skipForward] { viewModel.skip(by: skipInterval); return true }
         if key == bindings[.mute] { viewModel.isMuted.toggle(); return true }
         if key == bindings[.toggleFullscreen] { toggleFullscreen(); return true }
-        if key == bindings[.toggleCaptions] { toggleCaptions(); return true }
+        if key == bindings[.toggleCaptions] { viewModel.toggleSubtitles(); return true }
         if key == bindings[.frameBack] { viewModel.stepFrame(forward: false); return true }
         if key == bindings[.frameForward] { viewModel.stepFrame(forward: true); return true }
 
@@ -284,19 +304,10 @@ struct ContentView: View {
 
     private func adjustPlaybackSpeed(by steps: Int) {
         guard viewModel.currentItem != nil else { return }
-        let speeds = PlaybackSpeedMenu.speeds
+        let speeds = PlaybackSpeed.presets
         let currentIndex = speeds.firstIndex(of: viewModel.playbackRate) ?? speeds.firstIndex(of: 1.0) ?? 0
         let newIndex = min(max(currentIndex + steps, 0), speeds.count - 1)
         viewModel.playbackRate = speeds[newIndex]
-    }
-
-    private func toggleCaptions() {
-        let tracks = viewModel.availableSubtitleTracks()
-        if tracks.contains(where: \.isSelected) {
-            viewModel.selectSubtitleTrack(id: nil)
-        } else if let first = tracks.first {
-            viewModel.selectSubtitleTrack(id: first.id)
-        }
     }
 
     private func observeFullscreen(_ window: NSWindow) {
@@ -314,6 +325,7 @@ extension Notification.Name {
     static let openMediaFile = Notification.Name("openMediaFile")
     static let openMediaFolder = Notification.Name("openMediaFolder")
     static let openNetworkStream = Notification.Name("openNetworkStream")
+    static let downloadFromURL = Notification.Name("downloadFromURL")
     static let showMediaInfo = Notification.Name("showMediaInfo")
     static let saveSnapshot = Notification.Name("saveSnapshot")
 }

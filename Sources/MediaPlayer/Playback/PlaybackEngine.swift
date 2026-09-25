@@ -26,7 +26,9 @@ enum MediaFormat {
     /// Extensions AVFoundation cannot demux, so we need mpv (which bundles its own
     /// ffmpeg-based demuxer) for these regardless of the codec inside the container.
     private static let mpvOnlyExtensions: Set<String> = [
-        "mkv", "webm", "avi", "flv", "wmv", "ts", "m2ts", "mts", "vob", "ogv", "rm", "rmvb", "asf"
+        "mkv", "webm", "avi", "flv", "wmv", "ts", "m2ts", "mts", "vob", "ogv", "rm", "rmvb", "asf",
+        // Ogg-contained audio (what yt-dlp's Opus option produces).
+        "opus", "ogg", "oga"
     ]
 
     /// Formats AVFoundation opens natively. Only used alongside `mpvOnlyExtensions` to
@@ -121,7 +123,13 @@ protocol PlaybackEngine: AnyObject {
         fontName: String, textColorHex: String, backgroundColorHex: String, backgroundOpacity: Double, codepage: String
     )
 
-    /// Turned off while the app draws translated subtitles itself, so the original line
-    /// isn't drawn underneath the translation. Subtitle text keeps being reported either way.
+    /// Turned off while the app draws subtitles itself (translating, or an engine without
+    /// `repositionableSubtitles`), so there's no second copy drawn underneath. Subtitle text
+    /// keeps being reported either way.
     func setNativeSubtitleRenderingEnabled(_ enabled: Bool)
+
+    /// Raises the engine's own subtitles by this fraction of the video's height, so they
+    /// clear the controls bar while it's showing. 0 is the normal position. Only meaningful
+    /// when `capabilities.repositionableSubtitles` is true.
+    func setSubtitleBottomInset(_ fraction: Double)
 }

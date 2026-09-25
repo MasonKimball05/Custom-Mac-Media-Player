@@ -34,6 +34,9 @@ struct EngineCapabilities: Equatable {
     /// Font/color/background styling — AVFoundation renders subtitles internally with
     /// no public API to restyle them, the same reason it has no external-subtitle support.
     var subtitleAppearance = false
+    /// Can raise its own subtitle rendering above overlaid controls. When it can't
+    /// (AVFoundation), the app draws subtitles itself instead so they can move.
+    var repositionableSubtitles = false
 }
 
 /// One chapter marker, normalized across both engines. Identified by its start time

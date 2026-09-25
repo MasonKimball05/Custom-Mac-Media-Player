@@ -272,14 +272,32 @@ final class AVFoundationEngine: PlaybackEngine {
         legibleOutput?.suppressesPlayerRendering = !enabled
     }
 
+    func setSubtitleBottomInset(_ fraction: Double) {
+        // Unsupported — AVPlayerLayer's subtitle position can't be moved, so the app draws
+        // subtitles itself for this engine (see `capabilities`).
+    }
+
     private func tracks(for characteristic: AVMediaCharacteristic, kind: MediaTrack.Kind) -> [MediaTrack] {
         guard let item = player.currentItem, let group = selectionGroup(for: characteristic) else { return [] }
         let selected = item.currentMediaSelection.selectedMediaOption(in: group)
-        return group.options.enumerated().map { index, option in
-            MediaTrack(
+        // AVFoundation pairs each subtitle track with a "Forced" variant that only shows
+        // the lines marked forced (usually none), and selects that variant by default when
+        // the system's caption preference is off. It isn't a real choice to offer, and
+        // counting it as selected made subtitles read as on while nothing was showing.
+        // The ids stay indexes into the full `group.options`, which is what selection uses.
+        return group.options.enumerated().compactMap { index, option in
+            if characteristic == .legible, option.hasMediaCharacteristic(.containsOnlyForcedSubtitles) {
+                return nil
+            }
+            // macOS can offer a subtitle option it generates by transcribing the audio, in a
+            // language it guesses (English when the audio track isn't tagged with one). On
+            // audio in any other language that produces phonetic nonsense, so it's labeled as
+            // what it is rather than looking like a real subtitle track.
+            let isGenerated = option.hasMediaCharacteristic(.machineGenerated)
+            return MediaTrack(
                 id: String(index),
                 kind: kind,
-                title: option.displayName,
+                title: isGenerated ? "Auto-generated from audio" : option.displayName,
                 languageCode: option.locale?.language.languageCode?.identifier,
                 isSelected: option == selected
             )
@@ -293,6 +311,12 @@ final class AVFoundationEngine: PlaybackEngine {
             return
         }
         item.select(group.options[index], in: group)
+        // The legible output only reports a line when it starts, so a track turned on
+        // partway through a line would show nothing until the next one. Seeking in place
+        // makes AVFoundation send the line that's on screen now.
+        if characteristic == .legible {
+            player.seek(to: player.currentTime(), toleranceBefore: .zero, toleranceAfter: .zero)
+        }
     }
 
     // MARK: Frame step, snapshot, info
@@ -441,7 +465,10 @@ final class AVFoundationEngine: PlaybackEngine {
 private final class LegibleOutputDelegate: NSObject, AVPlayerItemLegibleOutputPushDelegate {
     var onText: (@MainActor (String?) -> Void)?
 
-    func legibleOutput(
+    // Explicitly @objc: this is an *optional* protocol method, which AVFoundation only
+    // calls if the object responds to its selector, and Swift doesn't infer @objc for it
+    // on a private class. Without this it compiled fine, and it was silently never called.
+    @objc func legibleOutput(
         _ output: AVPlayerItemLegibleOutput,
         didOutputAttributedStrings strings: [NSAttributedString],
         nativeSampleBuffers nativeSamples: [Any],
