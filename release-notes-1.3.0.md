@@ -17,6 +17,7 @@ This release adds a home screen, downloading from a link, on-device subtitle tra
 - Choose MP4 or MKV at a maximum resolution, or audio only as M4A, MP3, Opus, FLAC, or WAV
 - Pick subtitles to download with it, including automatic captions and YouTube's translations, saved as separate files, embedded in the video, or both
 - Downloads run in the background, with progress and controls in the toolbar, and can be added to the playlist automatically when finished
+- Notifies you when a newer yt-dlp is available, with the command to update it, since older versions stop working as sites change
 
 ### Playback and Library
 

@@ -35,6 +35,8 @@ final class DownloadManager: ObservableObject {
 
     @Published private(set) var jobs: [Job] = []
     @Published private(set) var destinationFolder: URL?
+    /// Whether the installed yt-dlp is behind; checked at launch and about daily.
+    let updates = YTDLPUpdateChecker()
 
     /// Called with a finished download's media file when "Add to playlist" was on.
     var onAddToPlaylist: ((URL) -> Void)?

@@ -33,6 +33,8 @@ enum AppSettingsKeys {
     static let focusOffShortcutName = "focusOffShortcutName"
     static let showsRemainingTime = "showsRemainingTime"
     static let downloadFolderBookmark = "downloadFolderBookmark"
+    static let ytdlpLatestVersion = "ytdlpLatestVersion"
+    static let ytdlpLastUpdateCheck = "ytdlpLastUpdateCheck"
     static let downloadKind = "downloadKind"
     static let downloadVideoFormat = "downloadVideoFormat"
     static let downloadAudioFormat = "downloadAudioFormat"

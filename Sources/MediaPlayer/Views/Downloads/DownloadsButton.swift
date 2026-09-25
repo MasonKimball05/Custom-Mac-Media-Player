@@ -54,6 +54,10 @@ private struct DownloadsList: View {
             }
             .padding(12)
 
+            YTDLPUpdateNotice(updates: downloads.updates)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+
             Divider()
 
             ScrollView {

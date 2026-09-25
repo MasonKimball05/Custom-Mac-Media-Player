@@ -63,6 +63,15 @@ enum YTDLP {
         return RemoteMediaInfo(json: json, sourceURL: url)
     }
 
+    /// The installed yt-dlp's version ("2026.08.19"), or nil if it isn't installed or
+    /// didn't answer.
+    static func installedVersion() async -> String? {
+        guard isInstalled else { return nil }
+        guard let (status, output, _) = try? await run(makeProcess(arguments: ["--version"])), status == 0 else { return nil }
+        let version = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return version.isEmpty ? nil : version
+    }
+
     /// Runs `process` to completion, collecting stdout and stderr. Both pipes are drained
     /// as data arrives, since a full pipe would block yt-dlp and never let it exit.
     /// Cancelling the calling task terminates the process.

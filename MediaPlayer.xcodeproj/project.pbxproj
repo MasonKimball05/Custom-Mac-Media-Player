@@ -26,6 +26,7 @@
 		49A888549CABEB579494C965 /* SavePlaylistNameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B712DA282A6E5BD2FCE3BF /* SavePlaylistNameView.swift */; };
 		4F071237EDB18B7F76840E91 /* PersistedSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC842256D600E2CB13D2FFF /* PersistedSession.swift */; };
 		6177F5CA7324233F4A627F06 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DEFF983C6AEE7BE3F2F0F28E /* Assets.xcassets */; };
+		6B277AE193E8D19064ED082E /* YTDLPUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AE16A92393AE786315F4F3C /* YTDLPUpdateChecker.swift */; };
 		6B9D318122F661F1F49FA48B /* AdjustmentsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4EF868B7893F491069BC11 /* AdjustmentsPanel.swift */; };
 		6DCED9F1CBEFFA10EE168BAE /* RemappableAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3A6819C787DB607B98579E /* RemappableAction.swift */; };
 		7575F225AF21D45D135248AE /* VolumeControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2DE4C984D23BDE612D8B7CB /* VolumeControl.swift */; };
@@ -73,6 +74,7 @@
 		579D0FFDD62A4D2A44B3FD60 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		6015F736AF75A57FD9D24A25 /* AVFoundationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVFoundationEngine.swift; sourceTree = "<group>"; };
 		68CE9EA9BBAC07FFCCE1F4EA /* DownloadFromURLView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadFromURLView.swift; sourceTree = "<group>"; };
+		6AE16A92393AE786315F4F3C /* YTDLPUpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPUpdateChecker.swift; sourceTree = "<group>"; };
 		739FDC61A73C195BE8A18B3B /* SubtitleTranslationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleTranslationState.swift; sourceTree = "<group>"; };
 		785CB6D7748F5943CBB0A631 /* VideoLayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoLayerView.swift; sourceTree = "<group>"; };
 		7ACDAE2354C6F66649E35A39 /* MediaPlayer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MediaPlayer.entitlements; sourceTree = "<group>"; };
@@ -95,7 +97,7 @@
 		DEFF983C6AEE7BE3F2F0F28E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DFC842256D600E2CB13D2FFF /* PersistedSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedSession.swift; sourceTree = "<group>"; };
 		E1DFEFF772CC9E18E785CA45 /* MediaPlayer-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "MediaPlayer-Bridging-Header.h"; sourceTree = "<group>"; };
-		E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MediaPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5B3638C4BAA34BB699FB98D /* Media Player.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Media Player.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -161,6 +163,7 @@
 			children = (
 				810A29C03C647B0C5702FCC0 /* DownloadManager.swift */,
 				D730773159AEA7B26F99158B /* YTDLP.swift */,
+				6AE16A92393AE786315F4F3C /* YTDLPUpdateChecker.swift */,
 			);
 			path = Downloads;
 			sourceTree = "<group>";
@@ -168,7 +171,7 @@
 		3FC077C42F5E39CC53E70DDF /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */,
+				E5B3638C4BAA34BB699FB98D /* Media Player.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -304,7 +307,7 @@
 			packageProductDependencies = (
 			);
 			productName = MediaPlayer;
-			productReference = E5B3638C4BAA34BB699FB98D /* MediaPlayer.app */;
+			productReference = E5B3638C4BAA34BB699FB98D /* Media Player.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -397,6 +400,7 @@
 				7575F225AF21D45D135248AE /* VolumeControl.swift in Sources */,
 				8005D408648083CD463C4B1B /* WindowAccessor.swift in Sources */,
 				D7451BDEFB9143F9CDE40CF6 /* YTDLP.swift in Sources */,
+				6B277AE193E8D19064ED082E /* YTDLPUpdateChecker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -476,27 +480,32 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/MediaPlayer/Resources/MediaPlayer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readonly;
+				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readonly;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = (
-					/opt/homebrew/include,
-				);
+				HEADER_SEARCH_PATHS = /opt/homebrew/include;
 				INFOPLIST_FILE = Sources/MediaPlayer/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/mpv/lib,
-				);
+				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/mpv/lib;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"-lmpv",
-				);
-				OTHER_SWIFT_FLAGS = (
-					"-Xcc",
-					"-DGL_SILENCE_DEPRECATION",
-				);
+				OTHER_LDFLAGS = "-lmpv";
+				OTHER_SWIFT_FLAGS = "-Xcc -DGL_SILENCE_DEPRECATION";
 				PRODUCT_BUNDLE_IDENTIFIER = com.masonkimball.MediaPlayer;
 				PRODUCT_NAME = "Media Player";
 				SDKROOT = macosx;
@@ -570,27 +579,32 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Sources/MediaPlayer/Resources/MediaPlayer.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readonly;
+				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readonly;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = (
-					/opt/homebrew/include,
-				);
+				HEADER_SEARCH_PATHS = /opt/homebrew/include;
 				INFOPLIST_FILE = Sources/MediaPlayer/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/mpv/lib,
-				);
+				LIBRARY_SEARCH_PATHS = /opt/homebrew/opt/mpv/lib;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				OTHER_LDFLAGS = (
-					"-lmpv",
-				);
-				OTHER_SWIFT_FLAGS = (
-					"-Xcc",
-					"-DGL_SILENCE_DEPRECATION",
-				);
+				OTHER_LDFLAGS = "-lmpv";
+				OTHER_SWIFT_FLAGS = "-Xcc -DGL_SILENCE_DEPRECATION";
 				PRODUCT_BUNDLE_IDENTIFIER = com.masonkimball.MediaPlayer;
 				PRODUCT_NAME = "Media Player";
 				SDKROOT = macosx;

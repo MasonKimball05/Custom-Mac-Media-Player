@@ -216,6 +216,16 @@ How it's put together
   matters because sites change often enough that an old yt-dlp stops working.
   It needs ffmpeg for merging and conversion, which Homebrew's mpv already
   installs.
+- The app checks whether a newer yt-dlp is out: at launch, every few hours
+  while it's open, and when the Download from URL sheet opens. It compares
+  the installed version (`yt-dlp --version`) with the one Homebrew offers
+  ([formulae.brew.sh](https://formulae.brew.sh/api/formula/yt-dlp.json),
+  fetched at most daily), not yt-dlp's GitHub releases, since
+  `brew upgrade` can only install what Homebrew has. When it's behind, the
+  download sheet and the downloads list show the update command. The app
+  can't run the update itself: the sandbox lets it read `/opt/homebrew` but
+  not write there. See
+  [YTDLPUpdateChecker.swift](Sources/MediaPlayer/Downloads/YTDLPUpdateChecker.swift).
 - A child process inherits the app's sandbox, and `/opt/homebrew` doesn't
   exist inside it. The
   `com.apple.security.temporary-exception.files.absolute-path.read-only`

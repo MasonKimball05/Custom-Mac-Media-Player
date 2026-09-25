@@ -41,6 +41,8 @@ struct DownloadFromURLView: View {
                 .disabled(isFetching)
                 .onSubmit(fetch)
 
+            YTDLPUpdateNotice(updates: downloads.updates)
+
             if !YTDLP.isInstalled {
                 Label {
                     Text("yt-dlp isn't installed. Install it with Homebrew: ") + Text("brew install yt-dlp").font(.callout.monospaced())
@@ -73,6 +75,8 @@ struct DownloadFromURLView: View {
         .padding(20)
         .frame(width: 460)
         .onAppear { isFieldFocused = true }
+        // Picks up an update run in Terminal since the last check.
+        .task { await downloads.updates.refresh() }
     }
 
     private var trimmedURL: String { urlString.trimmingCharacters(in: .whitespacesAndNewlines) }
