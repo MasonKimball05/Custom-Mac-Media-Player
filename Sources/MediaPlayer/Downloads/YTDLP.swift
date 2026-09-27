@@ -31,7 +31,7 @@ enum YTDLP {
     enum FetchError: LocalizedError {
         case notInstalled
         case failed(String)
-        case playlist
+        case channel
 
         var errorDescription: String? {
             switch self {
@@ -39,15 +39,20 @@ enum YTDLP {
                 "yt-dlp isn't installed. Install it with Homebrew (brew install yt-dlp), then try again."
             case .failed(let message):
                 message
-            case .playlist:
-                "That link is a playlist or channel. Paste the link to a single video instead."
+            case .channel:
+                "That's a channel's main page. Open its Videos tab (or a playlist) and paste that link instead."
             }
         }
     }
 
-    /// Asks yt-dlp what's at `url` (title, available qualities, subtitles) without
-    /// downloading anything.
-    static func fetchInfo(for url: String) async throws -> RemoteMediaInfo {
+    enum FetchResult {
+        case video(RemoteMediaInfo)
+        case playlist(RemotePlaylist)
+    }
+
+    /// Asks yt-dlp what's at `url` (title, available qualities, subtitles; or, for a
+    /// playlist, the list of videos in it) without downloading anything.
+    static func fetchInfo(for url: String) async throws -> FetchResult {
         guard isInstalled else { throw FetchError.notInstalled }
         let process = makeProcess(arguments: ["--flat-playlist", "--no-warnings", "-J", "--", url])
         let (status, output, errorOutput) = try await run(process)
@@ -57,10 +62,13 @@ enum YTDLP {
         guard let json = try? JSONSerialization.jsonObject(with: output) as? [String: Any] else {
             throw FetchError.failed("yt-dlp returned information this app couldn't read.")
         }
-        if let type = json["_type"] as? String, type != "video" {
-            throw FetchError.playlist
+        if let type = json["_type"] as? String, type == "playlist" || type == "multi_video" {
+            let playlist = RemotePlaylist(json: json)
+            // A channel's main page lists its tabs (Videos, Shorts, Live), not videos.
+            guard !playlist.entries.isEmpty else { throw FetchError.channel }
+            return .playlist(playlist)
         }
-        return RemoteMediaInfo(json: json, sourceURL: url)
+        return .video(RemoteMediaInfo(json: json, sourceURL: url))
     }
 
     /// The installed yt-dlp's version ("2026.08.19"), or nil if it isn't installed or
@@ -164,7 +172,10 @@ struct RemoteMediaInfo {
         title = (json["title"] as? String) ?? "Untitled"
         uploader = (json["uploader"] as? String) ?? (json["channel"] as? String)
         duration = json["duration"] as? Double
-        thumbnailURL = (json["thumbnail"] as? String).flatMap(URL.init(string:))
+        // Playlist entries (listed without being fully fetched) carry "thumbnails" instead.
+        let thumbnail = (json["thumbnail"] as? String)
+            ?? ((json["thumbnails"] as? [[String: Any]])?.last?["url"] as? String)
+        thumbnailURL = thumbnail.flatMap(URL.init(string:))
 
         let formats = (json["formats"] as? [[String: Any]]) ?? [json]
         let videoFormats = formats.filter { format in
@@ -196,6 +207,26 @@ struct RemoteMediaInfo {
             return Subtitle(code: code, name: name, isAutomatic: isAutomatic)
         }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+}
+
+/// A playlist as yt-dlp lists it without fetching each video: enough to pick videos from
+/// and queue them. Each video's qualities and subtitles aren't known until it downloads.
+struct RemotePlaylist {
+    let title: String
+    let uploader: String?
+    let entries: [RemoteMediaInfo]
+
+    init(json: [String: Any]) {
+        title = (json["title"] as? String) ?? "Playlist"
+        uploader = (json["uploader"] as? String) ?? (json["channel"] as? String)
+        entries = ((json["entries"] as? [[String: Any]]) ?? []).compactMap { entry in
+            // Skip nested playlists and a channel's tabs; only actual videos are listed.
+            guard let url = (entry["url"] as? String) ?? (entry["webpage_url"] as? String),
+                  (entry["_type"] as? String ?? "url") != "playlist",
+                  (entry["ie_key"] as? String) != "YoutubeTab" else { return nil }
+            return RemoteMediaInfo(json: entry, sourceURL: url)
+        }
     }
 }
 
@@ -251,7 +282,16 @@ struct DownloadOptions {
     var maxHeight: Int?
     var audioFormat: AudioFormat = .m4a
     var subtitles: Set<RemoteMediaInfo.Subtitle> = []
+    /// For playlists, where each video's subtitles aren't known ahead of time: language
+    /// codes to download when a video has them ("en", "de").
+    var subtitleLanguages: [String] = []
+    /// Also for playlists: YouTube's automatic captions in whatever language is spoken.
+    var includesOriginalLanguageCaptions = false
     var subtitleSaving: SubtitleSaving = .separateFiles
+
+    var wantsSubtitles: Bool {
+        !subtitles.isEmpty || !subtitleLanguages.isEmpty || includesOriginalLanguageCaptions
+    }
 
     /// Whether subtitle files should be left next to the media once yt-dlp is done.
     var keepsSubtitleFiles: Bool { kind == .audio || subtitleSaving != .embedded }
@@ -296,13 +336,23 @@ struct DownloadOptions {
             }
         }
 
-        if !subtitles.isEmpty {
-            if subtitles.contains(where: { !$0.isAutomatic }) { arguments.append("--write-subs") }
-            if subtitles.contains(where: \.isAutomatic) { arguments.append("--write-auto-subs") }
+        if wantsSubtitles {
             // --sub-langs takes regular expressions, each matched against the whole code.
-            let languages = Set(subtitles.map(\.code)).sorted().map(NSRegularExpression.escapedPattern(for:))
+            var patterns = Set(subtitles.map(\.code)).union(subtitleLanguages).sorted()
+                .map(NSRegularExpression.escapedPattern(for:))
+            if includesOriginalLanguageCaptions {
+                patterns.append(".*-orig")
+            }
+            if subtitles.contains(where: { !$0.isAutomatic }) || !subtitleLanguages.isEmpty {
+                arguments.append("--write-subs")
+            }
+            // With both flags yt-dlp prefers uploaded subtitles and falls back to the
+            // automatic ones (for YouTube, its translations) for languages that have none.
+            if subtitles.contains(where: \.isAutomatic) || includesOriginalLanguageCaptions || !subtitleLanguages.isEmpty {
+                arguments.append("--write-auto-subs")
+            }
             arguments += [
-                "--sub-langs", languages.joined(separator: ","),
+                "--sub-langs", patterns.joined(separator: ","),
                 "--sub-format", "srt/vtt/best",
                 "--convert-subs", "srt",
             ]

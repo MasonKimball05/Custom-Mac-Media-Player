@@ -94,6 +94,12 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         // with sub-visibility off, which is what lets the app hide mpv's own rendering and
         // draw a translated line instead.
         mpv_observe_property(handle, 0, "sub-text", MPV_FORMAT_STRING)
+        // Tracks and chapters are cached from these instead of read on demand. The UI reads
+        // them on every redraw, and a synchronous read waits for mpv's core, which freezes
+        // the app whenever the core is busy (a slow stream still loading, say). A track
+        // selection also shows up here once mpv has applied it.
+        mpv_observe_property(handle, 0, "track-list", MPV_FORMAT_NODE)
+        mpv_observe_property(handle, 0, "chapter-list", MPV_FORMAT_NODE)
 
         mpv_set_wakeup_callback(handle, mpvWakeupTrampoline, Unmanaged.passUnretained(self).toOpaque())
     }
@@ -236,23 +242,20 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     // MARK: Tracks
 
+    private var audioTracks: [MediaTrack] = []
+    private var subtitleTracks: [MediaTrack] = []
+    private var chapters: [Chapter] = []
+
     func availableAudioTracks() -> [MediaTrack] {
-        tracks(ofMpvType: "audio", kind: .audio)
+        audioTracks
     }
 
     func availableSubtitleTracks() -> [MediaTrack] {
-        tracks(ofMpvType: "sub", kind: .subtitle)
+        subtitleTracks
     }
 
     func availableChapters() -> [Chapter] {
-        guard let count = getInt64Property("chapter-list/count") else { return [] }
-        var result: [Chapter] = []
-        for index in 0..<count {
-            guard let time = getRawDoubleProperty("chapter-list/\(index)/time") else { continue }
-            let title = getStringProperty("chapter-list/\(index)/title") ?? "Chapter \(index + 1)"
-            result.append(Chapter(title: title, startTime: time))
-        }
-        return result
+        chapters
     }
 
     func selectAudioTrack(id: String?) {
@@ -341,23 +344,6 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         return String(format: "#%02X%@", alpha, rgb)
     }
 
-    private func tracks(ofMpvType mpvType: String, kind: MediaTrack.Kind) -> [MediaTrack] {
-        guard let count = getInt64Property("track-list/count") else { return [] }
-        var result: [MediaTrack] = []
-        for index in 0..<count {
-            guard getStringProperty("track-list/\(index)/type") == mpvType,
-                  let id = getInt64Property("track-list/\(index)/id") else { continue }
-            result.append(MediaTrack(
-                id: String(id),
-                kind: kind,
-                title: getStringProperty("track-list/\(index)/title") ?? "",
-                languageCode: getStringProperty("track-list/\(index)/lang"),
-                isSelected: getFlagProperty("track-list/\(index)/selected") ?? false
-            ))
-        }
-        return result
-    }
-
     // MARK: Frame step, snapshot, info
 
     func stepFrame(forward: Bool) {
@@ -387,8 +373,14 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     /// live render context isn't something the single mpv instance we embed can do —
     /// it would need a second, offscreen mpv instance seeking independently. Scrubber
     /// hover just falls back to a text-only time tooltip for MKV/AVI/etc.
+    /// From a separate hidden mpv instance, so hovering the scrubber never moves playback.
     func generateThumbnail(at seconds: Double) async -> CGImage? {
-        nil
+        // currentLoadTarget is a path for local files, a URL string for streams (which
+        // would mean downloading from the network for every hover position).
+        guard let target = currentLoadTarget, target.hasPrefix("/") else { return nil }
+        return await MPVThumbnailer.shared.thumbnail(
+            for: URL(fileURLWithPath: target), at: seconds, maxWidth: 240, isPreview: true
+        )
     }
 
     func mediaInfo() async -> MediaInfo {
@@ -422,18 +414,11 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
 
     /// Treats 0 as "unavailable" — right for the media-info fields this backs (bitrate,
     /// sample rate: 0 there really does mean unknown), wrong for anything where 0 is a
-    /// legitimate value (a chapter starting at time 0). Use `getRawDoubleProperty` for those.
+    /// legitimate value.
     private func getDoubleProperty(_ name: String) -> Double? {
         guard let handle else { return nil }
         var value: Double = 0
         guard mpv_get_property(handle, name, MPV_FORMAT_DOUBLE, &value) >= 0, value != 0 else { return nil }
-        return value
-    }
-
-    private func getRawDoubleProperty(_ name: String) -> Double? {
-        guard let handle else { return nil }
-        var value: Double = 0
-        guard mpv_get_property(handle, name, MPV_FORMAT_DOUBLE, &value) >= 0 else { return nil }
         return value
     }
 
@@ -442,13 +427,6 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         var value: Int64 = 0
         guard mpv_get_property(handle, name, MPV_FORMAT_INT64, &value) >= 0 else { return nil }
         return value
-    }
-
-    private func getFlagProperty(_ name: String) -> Bool? {
-        guard let handle else { return nil }
-        var value: Int32 = 0
-        guard mpv_get_property(handle, name, MPV_FORMAT_FLAG, &value) >= 0 else { return nil }
-        return value != 0
     }
 
     private func setDoubleProperty(_ name: String, _ value: Double) {
@@ -527,6 +505,31 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
             guard let namePtr = property.name else { return }
             let name = String(cString: namePtr)
 
+            if name == "track-list" || name == "chapter-list" {
+                let entries = property.format == MPV_FORMAT_NODE
+                    ? property.data.map { Self.maps(in: $0.assumingMemoryBound(to: mpv_node.self).pointee) } ?? []
+                    : []
+                if name == "track-list" {
+                    let audio = Self.tracks(in: entries, ofMpvType: "audio", kind: .audio)
+                    let subtitles = Self.tracks(in: entries, ofMpvType: "sub", kind: .subtitle)
+                    Task { @MainActor [weak self] in
+                        self?.audioTracks = audio
+                        self?.subtitleTracks = subtitles
+                        self?.delegate?.engineDidUpdateTracks()
+                    }
+                } else {
+                    let chapters = entries.enumerated().compactMap { index, entry -> Chapter? in
+                        guard let time = entry["time"].flatMap(Self.double) else { return nil }
+                        return Chapter(title: entry["title"].flatMap(Self.string) ?? "Chapter \(index + 1)", startTime: time)
+                    }
+                    Task { @MainActor [weak self] in
+                        self?.chapters = chapters
+                        self?.delegate?.engineDidUpdateTracks()
+                    }
+                }
+                return
+            }
+
             if name == "sub-text" {
                 // MPV_FORMAT_NONE when there's no subtitle track at all; an empty string
                 // between lines or for image-based subtitles.
@@ -568,6 +571,56 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         default:
             break
         }
+    }
+
+    // MARK: Node parsing (on the event thread; values are copied out before mpv frees them)
+
+    /// The maps in an mpv node array, like each track of `track-list`.
+    nonisolated private static func maps(in node: mpv_node) -> [[String: mpv_node]] {
+        guard node.format == MPV_FORMAT_NODE_ARRAY, let list = node.u.list?.pointee else { return [] }
+        return (0..<Int(list.num)).compactMap { index in
+            guard let item = list.values?[index], item.format == MPV_FORMAT_NODE_MAP, let map = item.u.list?.pointee else { return nil }
+            var entry: [String: mpv_node] = [:]
+            for field in 0..<Int(map.num) {
+                if let key = map.keys?[field], let value = map.values?[field] {
+                    entry[String(cString: key)] = value
+                }
+            }
+            return entry
+        }
+    }
+
+    nonisolated private static func tracks(in entries: [[String: mpv_node]], ofMpvType mpvType: String, kind: MediaTrack.Kind) -> [MediaTrack] {
+        entries.compactMap { entry in
+            guard entry["type"].flatMap(string) == mpvType, let id = entry["id"].flatMap(int64) else { return nil }
+            return MediaTrack(
+                id: String(id),
+                kind: kind,
+                title: entry["title"].flatMap(string) ?? "",
+                languageCode: entry["lang"].flatMap(string),
+                isSelected: entry["selected"].flatMap(flag) ?? false
+            )
+        }
+    }
+
+    nonisolated private static func string(_ node: mpv_node) -> String? {
+        node.format == MPV_FORMAT_STRING ? node.u.string.map { String(cString: $0) } : nil
+    }
+
+    nonisolated private static func int64(_ node: mpv_node) -> Int64? {
+        node.format == MPV_FORMAT_INT64 ? node.u.int64 : nil
+    }
+
+    nonisolated private static func double(_ node: mpv_node) -> Double? {
+        switch node.format {
+        case MPV_FORMAT_DOUBLE: node.u.double_
+        case MPV_FORMAT_INT64: Double(node.u.int64)
+        default: nil
+        }
+    }
+
+    nonisolated private static func flag(_ node: mpv_node) -> Bool? {
+        node.format == MPV_FORMAT_FLAG ? node.u.flag != 0 : nil
     }
 
     nonisolated private func notifyTimeUpdate(_ value: Double) {

@@ -71,7 +71,7 @@ private struct DownloadsList: View {
             .frame(maxHeight: 360)
             .fixedSize(horizontal: false, vertical: true)
 
-            if downloads.jobs.contains(where: { !$0.isRunning }) {
+            if downloads.jobs.contains(where: { !$0.isActive }) {
                 HStack {
                     Spacer()
                     Button("Clear Finished") { downloads.clearFinished() }
@@ -117,6 +117,8 @@ private struct DownloadRow: View {
     @ViewBuilder
     private var status: some View {
         switch job.state {
+        case .queued:
+            Text("Waiting to start").font(.caption).foregroundStyle(.secondary)
         case .running:
             if let fraction = job.fraction {
                 ProgressView(value: fraction) {
@@ -147,7 +149,7 @@ private struct DownloadRow: View {
     @ViewBuilder
     private var actions: some View {
         switch job.state {
-        case .running:
+        case .queued, .running:
             iconButton("xmark.circle.fill", help: "Cancel Download") { downloads.cancel(job.id) }
         case .finished(let mediaFile, let files):
             if let mediaFile {

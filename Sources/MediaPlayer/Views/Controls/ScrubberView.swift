@@ -10,8 +10,8 @@ struct ScrubberView: View {
     let onScrubStart: () -> Void
     let onScrub: (Double) -> Void
     let onScrubEnd: (Double) -> Void
-    /// Returns `nil` when the active engine doesn't support previews (mpv/MKV today) or
-    /// generation just failed — either way the tooltip quietly falls back to text-only.
+    /// Returns `nil` when there's no frame to show (a network stream, or generation failed),
+    /// and the tooltip falls back to text only.
     let thumbnailProvider: (Double) async -> CGImage?
 
     @State private var hoverFraction: Double?

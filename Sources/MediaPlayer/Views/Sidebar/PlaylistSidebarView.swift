@@ -65,6 +65,16 @@ struct PlaylistSidebarView: View {
 
                     Divider()
 
+                    Button(viewModel.duplicateCount > 0
+                           ? "Remove \(viewModel.duplicateCount) Duplicate\(viewModel.duplicateCount == 1 ? "" : "s")"
+                           : "Remove Duplicates") {
+                        viewModel.removeDuplicates()
+                        selection.removeAll()
+                    }
+                    .disabled(viewModel.duplicateCount == 0)
+
+                    Divider()
+
                     Button("Export to M3U\u{2026}") {
                         exportPlaylist()
                     }
@@ -200,7 +210,8 @@ struct PlaylistSidebarView: View {
                         PlaylistRow(
                             item: item,
                             isCurrent: item.id == viewModel.currentItemID,
-                            isPlaying: viewModel.isPlaying && item.id == viewModel.currentItemID
+                            isPlaying: viewModel.isPlaying && item.id == viewModel.currentItemID,
+                            thumbnail: viewModel.playlistThumbnail(for:)
                         )
                         .tag(item.id)
                         .moveDisabled(!searchText.isEmpty)
@@ -292,21 +303,40 @@ private struct PlaylistRow: View {
     let item: MediaItem
     let isCurrent: Bool
     let isPlaying: Bool
+    let thumbnail: (MediaItem) async -> CGImage?
+
+    @State private var image: CGImage?
 
     var body: some View {
         HStack(spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isCurrent ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06))
-                    .frame(width: 28, height: 28)
+                if let image {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 50, height: 28)
+                        .overlay(Color.black.opacity(isPlaying ? 0.45 : 0))
+                } else {
+                    Rectangle()
+                        .fill(isCurrent ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06))
+                    if !isPlaying {
+                        Image(systemName: item.isVideo ? "film" : "music.note")
+                            .font(.system(size: 12))
+                            .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
+                    }
+                }
                 if isPlaying {
                     EqualizerGlyph()
-                } else {
-                    Image(systemName: item.isVideo ? "film" : "music.note")
-                        .font(.system(size: 12))
-                        .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
                 }
             }
+            .frame(width: 50, height: 28)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay {
+                if isCurrent, image != nil {
+                    RoundedRectangle(cornerRadius: 5).strokeBorder(Color.accentColor, lineWidth: 1.5)
+                }
+            }
+            .task(id: item.id) { image = await thumbnail(item) }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Fixes SRT files made from YouTube's automatic captions. Those captions scroll: each line
@@ -41,7 +42,9 @@ enum RollUpCaptions {
               let text = String(data: data, encoding: .utf8),
               let fixedText = fixed(text) else { return url }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Subtitles", isDirectory: true)
-        let copy = folder.appendingPathComponent(UUID().uuidString).appendingPathExtension("srt")
+        // Named after the original's path, so loading the same file again replaces its copy.
+        let name = SHA256.hash(data: Data(url.path.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+        let copy = folder.appendingPathComponent(name).appendingPathExtension("srt")
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try fixedText.write(to: copy, atomically: true, encoding: .utf8)

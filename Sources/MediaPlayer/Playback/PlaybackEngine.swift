@@ -65,6 +65,9 @@ protocol PlaybackEngineDelegate: AnyObject {
     /// whether or not the engine is drawing subtitles itself. Image-based subtitle tracks
     /// (DVD/Blu-ray style) have no text to report.
     func engineDidUpdateSubtitleText(_ text: String?)
+    /// The engine's audio/subtitle tracks, their selection, or its chapters changed.
+    /// Engines whose track lists are read on demand never call it.
+    func engineDidUpdateTracks()
 }
 
 /// Common playback surface both engines implement. Rendering is deliberately out of

@@ -14,6 +14,12 @@ struct MediaItem: Identifiable, Hashable {
     var duration: Double?
     var isVideo: Bool
 
+    /// What makes two entries the same file, regardless of how each URL was spelled (a
+    /// path from Finder versus one resolved from a saved bookmark). Streams use the URL.
+    var fileIdentity: String {
+        url.isFileURL ? url.standardizedFileURL.path : url.absoluteString
+    }
+
     init(url: URL) {
         self.id = UUID()
         self.url = url

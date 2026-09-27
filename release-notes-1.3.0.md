@@ -16,11 +16,17 @@ This release adds a home screen, downloading from a link, on-device subtitle tra
 - Download a video or its audio from YouTube or any other site yt-dlp supports (File > Download from URL, Shift+Cmd+D)
 - Choose MP4 or MKV at a maximum resolution, or audio only as M4A, MP3, Opus, FLAC, or WAV
 - Pick subtitles to download with it, including automatic captions and YouTube's translations, saved as separate files, embedded in the video, or both
+- Download playlists: pick which videos to include, and choose the format, quality, and subtitle languages once for all of them
+- Downloads run two at a time, with the rest waiting their turn
+- Quitting while downloads are in progress asks first, instead of silently stopping them
 - Downloads run in the background, with progress and controls in the toolbar, and can be added to the playlist automatically when finished
 - Notifies you when a newer yt-dlp is available, with the command to update it, since older versions stop working as sites change
 
 ### Playback and Library
 
+- Thumbnails for MKV, WebM, AVI, and other mpv-backed files: in the scrubber's hover preview, on the home screen, and in the playlist
+- Video thumbnails in the playlist sidebar
+- Remove Duplicates, in the playlist menu, and opening a file that's already in the playlist now plays the existing entry instead of adding a copy
 - Every file now remembers its own resume position, independent of the current playlist
 - Open Folder (Option+Cmd+O) adds every playable file in a folder and its subfolders
 - MKV, WebM, AVI, and the other mpv-backed formats can now be opened from Finder by double-clicking or with Open With

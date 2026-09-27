@@ -29,8 +29,11 @@ final class YTDLPUpdateChecker: ObservableObject {
 
     init() {
         latestVersion = UserDefaults.standard.string(forKey: AppSettingsKeys.ytdlpLatestVersion)
-        // Checked again every few hours while the app stays open, which can be days.
+        // First checked a few minutes after launch (or sooner, when the download sheet
+        // opens), not at launch itself: it starts a Python process, and most launches
+        // aren't for downloading. Then again every few hours while the app stays open.
         periodicTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5 * 60))
             while !Task.isCancelled {
                 await self?.refresh()
                 try? await Task.sleep(for: .seconds(6 * 60 * 60))

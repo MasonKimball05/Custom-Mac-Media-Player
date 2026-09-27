@@ -13,6 +13,8 @@ import Foundation
 final class DownloadManager: ObservableObject {
     struct Job: Identifiable {
         enum State {
+            /// Waiting for a free slot (see `maxConcurrentDownloads`).
+            case queued
             case running
             case finished(mediaFile: URL?, files: [URL])
             case failed(String)
@@ -22,14 +24,22 @@ final class DownloadManager: ObservableObject {
         let id = UUID()
         let title: String
         let thumbnailURL: URL?
-        var state: State = .running
-        var stage = "Starting"
+        var state: State = .queued
+        var stage = "Waiting"
         /// nil while the current stage has no measurable progress.
         var fraction: Double?
 
         var isRunning: Bool {
             if case .running = state { return true }
             return false
+        }
+
+        /// Running or still waiting to: not yet finished, failed, or cancelled.
+        var isActive: Bool {
+            switch state {
+            case .queued, .running: true
+            case .finished, .failed, .cancelled: false
+            }
         }
     }
 
@@ -41,11 +51,23 @@ final class DownloadManager: ObservableObject {
     /// Called with a finished download's media file when "Add to playlist" was on.
     var onAddToPlaylist: ((URL) -> Void)?
 
+    private struct PendingDownload {
+        let jobID: Job.ID
+        let info: RemoteMediaInfo
+        let options: DownloadOptions
+        let addToPlaylist: Bool
+        let destination: URL
+    }
+
+    /// Two at a time: enough to keep a playlist moving, few enough that a 50-video
+    /// playlist doesn't start 50 downloads at once (and trip the site's rate limits).
+    private let maxConcurrentDownloads = 2
+    private var pending: [PendingDownload] = []
     private var processes: [Job.ID: Process] = [:]
     private var cancelledJobs: Set<Job.ID> = []
     private var accessedFolder: URL?
 
-    var hasRunningJobs: Bool { jobs.contains(where: \.isRunning) }
+    var hasRunningJobs: Bool { jobs.contains(where: \.isActive) }
 
     /// Average progress across running downloads, for the toolbar icon.
     var overallFraction: Double? {
@@ -54,7 +76,11 @@ final class DownloadManager: ObservableObject {
         return running.map { $0.fraction ?? 0 }.reduce(0, +) / Double(running.count)
     }
 
+    /// The app's one manager, for the app delegate's quit confirmation.
+    private(set) static weak var current: DownloadManager?
+
     init() {
+        Self.current = self
         restoreDestinationFolder()
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
@@ -116,17 +142,42 @@ final class DownloadManager: ObservableObject {
     // MARK: Jobs
 
     func startDownload(info: RemoteMediaInfo, options: DownloadOptions, addToPlaylist: Bool) {
-        guard let destination = destinationFolder else { return }
-        let job = Job(title: info.title, thumbnailURL: info.thumbnailURL)
-        jobs.insert(job, at: 0)
+        startDownloads([info], options: options, addToPlaylist: addToPlaylist)
+    }
+
+    /// Queues one download per video, in order; they start as slots free up.
+    func startDownloads(_ videos: [RemoteMediaInfo], options: DownloadOptions, addToPlaylist: Bool) {
+        guard let destination = destinationFolder, !videos.isEmpty else { return }
+        let newJobs = videos.map { Job(title: $0.title, thumbnailURL: $0.thumbnailURL) }
+        jobs.insert(contentsOf: newJobs, at: 0)
+        for (job, info) in zip(newJobs, videos) {
+            pending.append(PendingDownload(jobID: job.id, info: info, options: options,
+                                           addToPlaylist: addToPlaylist, destination: destination))
+        }
+        startQueuedDownloads()
+    }
+
+    private func startQueuedDownloads() {
+        while processes.count < maxConcurrentDownloads, !pending.isEmpty {
+            launch(pending.removeFirst())
+        }
+    }
+
+    private func launch(_ download: PendingDownload) {
+        let (info, options, addToPlaylist, destination) = (download.info, download.options, download.addToPlaylist, download.destination)
+        let jobID = download.jobID
+        update(jobID) { job in
+            job.state = .running
+            job.stage = "Starting"
+        }
 
         let workDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("Downloads", isDirectory: true)
-            .appendingPathComponent(job.id.uuidString, isDirectory: true)
+            .appendingPathComponent(jobID.uuidString, isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
         } catch {
-            update(job.id) { $0.state = .failed("Couldn't create a working folder: \(error.localizedDescription)") }
+            update(jobID) { $0.state = .failed("Couldn't create a working folder: \(error.localizedDescription)") }
             return
         }
 
@@ -137,7 +188,6 @@ final class DownloadManager: ObservableObject {
         process.standardError = stderr
 
         let lines = LineSplitter()
-        let jobID = job.id
         stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let newLines = lines.append(handle.availableData)
             guard !newLines.isEmpty else { return }
@@ -168,6 +218,11 @@ final class DownloadManager: ObservableObject {
     }
 
     func cancel(_ id: Job.ID) {
+        if let index = pending.firstIndex(where: { $0.jobID == id }) {
+            pending.remove(at: index)
+            update(id) { $0.state = .cancelled }
+            return
+        }
         guard let process = processes[id], process.isRunning else { return }
         cancelledJobs.insert(id)
         update(id) { $0.stage = "Cancelling" }
@@ -181,15 +236,16 @@ final class DownloadManager: ObservableObject {
     }
 
     func remove(_ id: Job.ID) {
-        guard let job = jobs.first(where: { $0.id == id }), !job.isRunning else { return }
+        guard let job = jobs.first(where: { $0.id == id }), !job.isActive else { return }
         jobs.removeAll { $0.id == id }
     }
 
     func clearFinished() {
-        jobs.removeAll { !$0.isRunning }
+        jobs.removeAll { !$0.isActive }
     }
 
     private func terminateAll() {
+        pending.removeAll()
         for process in processes.values where process.isRunning {
             process.terminate()
         }
@@ -225,7 +281,10 @@ final class DownloadManager: ObservableObject {
     private func finish(_ id: Job.ID, status: Int32, errorMessage: String?, workDirectory: URL,
                         destination: URL, options: DownloadOptions, addToPlaylist: Bool) {
         processes[id] = nil
-        defer { try? FileManager.default.removeItem(at: workDirectory) }
+        defer {
+            try? FileManager.default.removeItem(at: workDirectory)
+            startQueuedDownloads()
+        }
 
         if cancelledJobs.remove(id) != nil {
             update(id) { $0.state = .cancelled }

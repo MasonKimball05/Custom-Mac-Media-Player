@@ -205,8 +205,16 @@ and the next step shows the video's details and asks:
   optionally adding each finished file to the playlist without interrupting
   what's playing.
 
-Downloads run in the background. A toolbar button with a progress ring
-opens the list, with cancel, play, and Show in Finder.
+A playlist link lists its videos with checkboxes, and one set of options
+applies to all of them. yt-dlp lists a playlist without fetching each video,
+so quality is a maximum and subtitles are chosen by language code (plus,
+optionally, the auto-generated captions in whatever language is spoken),
+downloaded for each video that has them. A channel's main page lists tabs,
+not videos, so the app asks for the Videos tab or a playlist instead.
+
+Downloads run in the background, two at a time, with the rest waiting their
+turn. A toolbar button with a progress ring opens the list, with cancel, play,
+and Show in Finder.
 
 How it's put together
 ([Downloads/](Sources/MediaPlayer/Downloads)):
@@ -374,6 +382,9 @@ mpv's core thread waited on the answer. The app's calls into mpv from the UI
 also use mpv's asynchronous API (`mpv_set_property_async`), so a busy core
 thread can't freeze the app. Moving the subtitles whenever the controls bar
 showed or hid was what turned that wait into a hang.
+The same goes for reading: the track list and chapters are observed
+(`track-list`, `chapter-list`) and cached as mpv reports changes, rather than
+read synchronously each time the controls redraw.
 
 ### Subtitles stay above the controls
 
@@ -390,6 +401,20 @@ These formats are also registered as custom Uniform Type Identifiers in
 doesn't ship system UTIs for most of them), so double-clicking or right-click
 ▸ Open With ▸ Media Player works from Finder the same as it does for
 mp4/mov — not just opening them from inside the app.
+
+### Thumbnails for every format
+
+AVAssetImageGenerator can't read MKV, WebM, and the other mpv-backed formats,
+so [MPVThumbnailer.swift](Sources/MediaPlayer/Playback/MPVThumbnailer.swift)
+runs a second, hidden mpv instance with no video output (`vo=null`), seeks,
+and takes the decoded frame (`screenshot-raw video`). An exact seek on a
+1080p file takes about 0.05s, fast enough for the scrubber's hover preview.
+It's separate from the player's own instance, so previews never move
+playback. It supplies the scrubber previews, the home screen's Continue
+Watching thumbnails, and the playlist sidebar's thumbnails for those formats.
+AVFoundation-backed files use AVAssetImageGenerator. Sidebar thumbnails are
+taken a tenth of the way in (past the black opening frame most videos have)
+and kept for the session.
 
 ### One window
 

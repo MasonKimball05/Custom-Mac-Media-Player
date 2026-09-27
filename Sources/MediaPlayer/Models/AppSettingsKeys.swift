@@ -40,6 +40,8 @@ enum AppSettingsKeys {
     static let downloadAudioFormat = "downloadAudioFormat"
     static let downloadSubtitleSaving = "downloadSubtitleSaving"
     static let downloadAddsToPlaylist = "downloadAddsToPlaylist"
+    static let downloadPlaylistSubtitleLanguages = "downloadPlaylistSubtitleLanguages"
+    static let downloadPlaylistOriginalCaptions = "downloadPlaylistOriginalCaptions"
 }
 
 enum AppSettingsDefaults {

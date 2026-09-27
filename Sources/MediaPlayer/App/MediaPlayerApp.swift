@@ -208,4 +208,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
+
+    /// Quitting (Cmd-Q, or closing the only window) stops yt-dlp and discards whatever it
+    /// had downloaded so far, so ask first while downloads are running or waiting.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let activeCount = DownloadManager.current?.jobs.filter(\.isActive).count ?? 0
+        guard activeCount > 0 else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = activeCount == 1 ? "A download is in progress." : "\(activeCount) downloads are in progress."
+        alert.informativeText = "Quitting stops them, and what's been downloaded so far is discarded."
+        alert.addButton(withTitle: "Keep Downloading")
+        alert.addButton(withTitle: "Quit")
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
 }

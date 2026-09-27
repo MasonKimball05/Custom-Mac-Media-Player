@@ -279,17 +279,44 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// like every other media player. The rest queue up right after it in the
     /// playlist, reachable via Next Track / the sidebar, rather than playing silently
     /// in the background or (worse) never playing until you dig into the sidebar.
+    ///
+    /// A file that's already in the playlist isn't added again: it plays from its existing
+    /// entry, the same as Open Recent.
     func addFiles(_ urls: [URL]) {
-        let newItems = urls
-            .filter { $0.isFileURL }
+        var seen = Set(playlist.map(\.fileIdentity))
+        let fileURLs = urls.filter(\.isFileURL)
+        let newItems = fileURLs
+            .filter { seen.insert($0.standardizedFileURL.path).inserted }
             .map { MediaItem(url: $0) }
-        guard let first = newItems.first else { return }
+        guard let firstURL = fileURLs.first else { return }
 
         playlist.append(contentsOf: newItems)
-        play(item: first)
+        if let first = playlist.first(where: { $0.fileIdentity == firstURL.standardizedFileURL.path }) {
+            play(item: first)
+        }
         regenerateShuffleOrder()
         persistSession()
         newItems.forEach(recordRecentFile)
+    }
+
+    /// How many playlist entries are extra copies of a file that's already in it.
+    var duplicateCount: Int {
+        playlist.count - Set(playlist.map(\.fileIdentity)).count
+    }
+
+    /// Keeps one entry per file: the one that's playing, if it's a copy, otherwise the
+    /// first. Copies piled up when the app used to open a hidden window per Finder launch,
+    /// each of which added the file again.
+    func removeDuplicates() {
+        var kept: [String: MediaItem.ID] = [:]
+        if let currentItem {
+            kept[currentItem.fileIdentity] = currentItem.id
+        }
+        for item in playlist where kept[item.fileIdentity] == nil {
+            kept[item.fileIdentity] = item.id
+        }
+        let keptIDs = Set(kept.values)
+        removeItems(Set(playlist.map(\.id)).subtracting(keptIDs))
     }
 
     /// Adds files to the end of the queue without interrupting whatever is playing (only
@@ -297,7 +324,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// like a finished download.
     func enqueueFiles(_ urls: [URL]) {
         let newItems = urls
-            .filter { $0.isFileURL && !playlist.map(\.url).contains($0) }
+            .filter { url in url.isFileURL && !playlist.contains { $0.fileIdentity == url.standardizedFileURL.path } }
             .map { MediaItem(url: $0) }
         guard let first = newItems.first else { return }
 
@@ -312,11 +339,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
 
     /// Plays a local file, reusing its queue entry if it's already in the playlist.
     func playFile(_ url: URL) {
-        if let existing = playlist.first(where: { $0.url == url }) {
-            play(item: existing)
-        } else {
-            addFiles([url])
-        }
+        addFiles([url])
     }
 
     /// Adds and immediately plays a direct stream URL (http/https/rtsp/etc.) rather than
@@ -595,6 +618,12 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         subtitleTranslation.update(sourceText: text)
     }
 
+    /// Track selection and chapters live in the engine, so views that show them (the CC
+    /// button, the settings menu) are told to re-read them.
+    func engineDidUpdateTracks() {
+        objectWillChange.send()
+    }
+
     func engineDidBecomeReady(hasVideoTrack: Bool) {
         isLoading = false
         isVideoTrackPresent = hasVideoTrack
@@ -845,7 +874,13 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// Matched by URL rather than `MediaItem.id` — a RecentFile resolves to a brand-new
     /// MediaItem with a fresh id every time, so ids never line up with what's in the queue.
     private func isCurrentItem(_ recent: RecentFile) -> Bool {
-        currentItem?.url.absoluteString == recent.urlString
+        currentItem?.fileIdentity == fileIdentity(of: recent)
+    }
+
+    /// The same identity MediaItem.fileIdentity gives, so a recent file matches its queue
+    /// entry however either URL was spelled.
+    private func fileIdentity(of recent: RecentFile) -> String? {
+        URL(string: recent.urlString).map { $0.isFileURL ? $0.standardizedFileURL.path : $0.absoluteString }
     }
 
     /// Drops just the remembered position for one file — pulls it out of Continue
@@ -870,17 +905,55 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     /// limitation as the live scrubber-hover preview: mpv-only formats (MKV/AVI/etc.)
     /// return nil, and the card just falls back to its placeholder icon.
     func generateHomeScreenThumbnail(for file: RecentFile, at seconds: Double) async -> CGImage? {
-        guard let item = resolveEntry(file.entry), MediaFormat.requiredEngine(for: item.url) == .avFoundation else {
+        guard let item = resolveEntry(file.entry) else { return nil }
+        let image = await Self.frame(of: item.url, at: seconds, maxWidth: 320)
+        // Resolving started access to the file; keep it only if the file is queued.
+        releaseSecurityScopedAccessIfUnused([item.url])
+        return image
+    }
+
+    /// Sidebar thumbnails, generated once per file and remembered for the session. Files
+    /// with no frame to show (audio, or one that can't be read right now) aren't tried
+    /// again for a couple of minutes, so scrolling past them doesn't retry every time,
+    /// while a failure that was only temporary still gets another chance.
+    private var playlistThumbnails: [String: CGImage] = [:]
+    private var thumbnailFailures: [String: Date] = [:]
+    private let thumbnailRetryInterval: TimeInterval = 120
+
+    func playlistThumbnail(for item: MediaItem) async -> CGImage? {
+        guard item.url.isFileURL else { return nil }
+        if let failed = thumbnailFailures[item.fileIdentity], Date().timeIntervalSince(failed) < thumbnailRetryInterval {
             return nil
         }
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: item.url))
+        if let cached = playlistThumbnails[item.fileIdentity] { return cached }
+        // A tenth of the way in skips the black frame most videos open on.
+        let seconds = item.duration.map { min($0 * 0.1, 30) } ?? 5
+        var image = await Self.frame(of: item.url, at: seconds, maxWidth: 120)
+        if image == nil, seconds > 0 {
+            // Shorter than the guess, when the duration isn't known yet.
+            image = await Self.frame(of: item.url, at: 0, maxWidth: 120)
+        }
+        if let image {
+            playlistThumbnails[item.fileIdentity] = image
+            thumbnailFailures[item.fileIdentity] = nil
+        } else {
+            thumbnailFailures[item.fileIdentity] = Date()
+        }
+        return image
+    }
+
+    /// A still frame from a local file, from whichever engine can read it.
+    private static func frame(of url: URL, at seconds: Double, maxWidth: CGFloat) async -> CGImage? {
+        if MediaFormat.requiredEngine(for: url) == .mpv {
+            return await MPVThumbnailer.shared.thumbnail(for: url, at: seconds, maxWidth: Int(maxWidth), isPreview: false)
+        }
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 320, height: 320)
+        generator.maximumSize = CGSize(width: maxWidth, height: maxWidth)
         let tolerance = CMTime(seconds: 1, preferredTimescale: 600)
         generator.requestedTimeToleranceBefore = tolerance
         generator.requestedTimeToleranceAfter = tolerance
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        return try? await generator.image(at: time).image
+        return try? await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
     }
 
     // MARK: Session persistence
@@ -1068,7 +1141,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         // entry rather than appending a second copy. For the current item, play(item:)
         // is a no-op that just resumes it if paused — so this reads as "take me back to
         // it," not a reload from the last throttled save.
-        if let existing = playlist.first(where: { $0.url.absoluteString == recent.urlString }) {
+        if let existing = playlist.first(where: { $0.fileIdentity == fileIdentity(of: recent) }) {
             play(item: existing)
             recordRecentFile(existing)
             return
