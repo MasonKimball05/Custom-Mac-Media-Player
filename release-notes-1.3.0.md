@@ -79,5 +79,6 @@ This release adds a home screen, downloading from a link, on-device subtitle tra
 ### Requirements
 
 - macOS 26 or later, Apple Silicon
-- Building from source requires [Homebrew](https://brew.sh) (`brew install mpv xcodegen`); see the README for details
+- [Homebrew](https://brew.sh) with mpv (`brew install mpv`), which the app loads libmpv from; building from source also needs `xcodegen`. See the README for details
 - Download from URL requires yt-dlp (`brew install yt-dlp`)
+- The app isn't signed with a Developer ID, so macOS blocks its first launch: allow it once with Open Anyway in System Settings > Privacy & Security (see Installing in the README)

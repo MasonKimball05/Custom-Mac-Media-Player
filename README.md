@@ -279,7 +279,41 @@ different ways to reuse a playlist later, which solve different problems:
   not a bug so much as a sandboxing reality; there's no way around it short
   of much broader file-access entitlements.
 
-## Getting started
+## Installing
+
+Download `Media-Player-<version>.zip` from the
+[Releases](../../releases) page, unzip it, and move **Media Player** to your
+Applications folder. It needs macOS 26 or later on Apple Silicon, plus
+[Homebrew](https://brew.sh) and mpv, which the app loads libmpv from:
+
+```bash
+brew install mpv
+brew install yt-dlp   # optional, only for Download from URL
+```
+
+### Opening it the first time
+
+The app isn't signed with an Apple Developer ID or notarized by Apple (that
+takes a paid Apple Developer Program membership), so macOS blocks the first
+launch of the downloaded copy with a warning that it can't verify the app.
+Allow it once, either way:
+
+- **System Settings:** open the app (it's blocked), then go to System Settings ▸
+  Privacy & Security, scroll to Security, and click **Open Anyway** next to
+  "Media Player". Confirm, and enter your password if asked. The old
+  right-click ▸ Open shortcut no longer works as of macOS 15.
+- **Terminal:** remove the "downloaded from the internet" mark that triggers
+  the check:
+
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/Media Player.app"
+  ```
+
+After that it opens normally, including after updates you install the same
+way (each new download needs allowing once). Building from source (below)
+skips this entirely, since macOS only checks apps that were downloaded.
+
+## Building from source
 
 Requires Xcode 26+ and macOS 26 or later (Homebrew's libmpv bottle is built
 requiring it), plus [Homebrew](https://brew.sh).
