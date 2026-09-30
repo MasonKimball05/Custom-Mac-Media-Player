@@ -17,6 +17,10 @@ struct SettingsView: View {
             ShortcutsSettingsView()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
                 .tag(2)
+
+            LibrarySettingsView()
+                .tabItem { Label("Library", systemImage: "externaldrive.connected.to.line.below") }
+                .tag(3)
         }
         .frame(width: 420)
         .scenePadding()
@@ -105,5 +109,61 @@ private struct PlaybackSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Connection to the shelf media server on the desktop.
+private struct LibrarySettingsView: View {
+    @AppStorage(AppSettingsKeys.shelfServerURL) private var serverURL = ""
+    @State private var token = ""
+    @State private var hasSavedToken = Keychain.read(account: ShelfClient.keychainAccount) != nil
+    @State private var status: String?
+    @State private var testing = false
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Server:", text: $serverURL, prompt: Text("http://arkans-pc1:8095"))
+                SecureField("Access token:", text: $token, prompt: Text(hasSavedToken ? "Saved in Keychain" : "SHELF_TOKEN from the desktop"))
+                HStack {
+                    Button("Save & Test") { Task { await saveAndTest() } }
+                        .disabled(testing || serverURL.isEmpty || (token.isEmpty && !hasSavedToken))
+                    if hasSavedToken {
+                        Button("Forget Token") {
+                            Keychain.delete(account: ShelfClient.keychainAccount)
+                            hasSavedToken = false
+                            status = nil
+                        }
+                    }
+                }
+                if let status {
+                    Text(status).font(.caption).foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Streams your desktop's media over Tailscale. The token is stored in your Keychain, never in plain settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func saveAndTest() async {
+        testing = true
+        defer { testing = false }
+        if !token.isEmpty {
+            hasSavedToken = Keychain.save(token, account: ShelfClient.keychainAccount)
+            token = ""
+            if !hasSavedToken {
+                status = "Couldn\u{2019}t save the token to your Keychain."
+                return
+            }
+        }
+        do {
+            let roots = try await ShelfClient.shared.roots()
+            status = "Connected: \(roots.roots.count) libraries, \(roots.files.formatted()) files."
+        } catch {
+            status = error.localizedDescription
+        }
     }
 }

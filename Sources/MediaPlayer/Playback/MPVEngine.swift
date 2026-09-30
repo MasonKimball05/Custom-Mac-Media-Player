@@ -276,11 +276,14 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
     }
 
     func addExternalSubtitle(url: URL) {
+        // mpv takes a path for local files and the full URL for network ones
+        // (url.path alone would drop the host).
+        let target = url.isFileURL ? url.path : url.absoluteString
         guard isFileLoaded else {
-            pendingSubtitlePaths.append(url.path)
+            pendingSubtitlePaths.append(target)
             return
         }
-        addSubtitleFile(atPath: url.path)
+        addSubtitleFile(atPath: target)
     }
 
     private func addSubtitleFile(atPath path: String) {

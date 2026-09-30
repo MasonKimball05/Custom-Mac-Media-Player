@@ -33,6 +33,15 @@ targets:
         LSMinimumSystemVersion: "26.0"
         NSHumanReadableCopyright: "Copyright © 2026 Mason Kimball."
         LSApplicationCategoryType: public.app-category.video
+        # Plain HTTP only to the desktop's shelf media server over Tailscale: local
+        # names like arkans-pc1, and *.ts.net MagicDNS names. Tailscale's WireGuard
+        # tunnel already encrypts that traffic; everything else still needs HTTPS.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            ts.net:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
         CFBundleDocumentTypes:
           - CFBundleTypeName: Video
             CFBundleTypeRole: Viewer

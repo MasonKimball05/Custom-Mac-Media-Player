@@ -5,6 +5,8 @@ import Foundation
 /// strings/numbers drifting between the Settings window and the views that use them.
 enum AppSettingsKeys {
     static let skipInterval = "skipIntervalSeconds"
+    /// Base URL of the shelf media server on the desktop, e.g. http://arkans-pc1:8095.
+    static let shelfServerURL = "shelfServerURL"
     static let autoHideControlsDelay = "autoHideControlsDelaySeconds"
     static let autoAdvancePlaylist = "autoAdvancePlaylist"
     static let hardwareDecodingEnabled = "hardwareDecodingEnabled"

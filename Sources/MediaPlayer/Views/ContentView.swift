@@ -34,7 +34,7 @@ struct ContentView: View {
     var body: some View {
         HStack(spacing: 0) {
             if showSidebar {
-                PlaylistSidebarView(viewModel: viewModel, showingHomeScreen: $showingHomeScreen, onOpenFile: openFilePanel)
+                SidebarContainerView(viewModel: viewModel, showingHomeScreen: $showingHomeScreen, onOpenFile: openFilePanel)
                     .frame(width: sidebarWidth)
                     .transition(.move(edge: .leading))
 

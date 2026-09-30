@@ -359,6 +359,35 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         recordRecentFile(item)
     }
 
+    /// Plays a library file, reusing its playlist entry if it's already queued.
+    func playLibraryFile(_ file: ShelfFile) {
+        guard let url = ShelfClient.itemURL(for: file) else { return }
+        if let existing = playlist.first(where: { $0.fileIdentity == url.absoluteString }) {
+            play(item: existing)
+            return
+        }
+        var item = MediaItem(url: url)
+        item.isVideo = file.isVideo
+        playlist.append(item)
+        play(item: item)
+        regenerateShuffleOrder()
+        persistSession()
+        recordRecentFile(item)
+    }
+
+    /// Adds library files to the end of the queue without playing them.
+    func enqueueLibraryFiles(_ files: [ShelfFile]) {
+        let existing = Set(playlist.map(\.fileIdentity))
+        for file in files {
+            guard let url = ShelfClient.itemURL(for: file), !existing.contains(url.absoluteString) else { continue }
+            var item = MediaItem(url: url)
+            item.isVideo = file.isVideo
+            playlist.append(item)
+        }
+        regenerateShuffleOrder()
+        persistSession()
+    }
+
     func removeItem(_ item: MediaItem) {
         removeItems([item.id])
     }
@@ -439,13 +468,49 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         currentChapterID = nil
         subtitleTranslation.reset()
 
-        let requiredEngineKind = MediaFormat.requiredEngine(for: item.url)
+        // Library items (shelf://) need a fresh signed stream link first; see ShelfClient.
+        if ShelfClient.isShelfURL(item.url) {
+            isPlaying = false
+            Task { @MainActor [weak self] in
+                do {
+                    let link = try await ShelfClient.shared.link(forItemURL: item.url)
+                    // The user may have picked something else while this was loading.
+                    guard let self, self.currentItemID == item.id else { return }
+                    guard let streamURL = URL(string: link.url) else { throw ShelfError.badResponse }
+                    let subtitles = (link.subtitles ?? []).compactMap { URL(string: $0.url) }
+                    self.startEngine(item: item, playURL: streamURL, startPosition: startPosition,
+                                     autoPlay: autoPlay, forceMPV: !subtitles.isEmpty)
+                    subtitles.forEach { self.mpvEngine.addExternalSubtitle(url: $0) }
+                } catch {
+                    guard let self, self.currentItemID == item.id else { return }
+                    self.isLoading = false
+                    self.isPlaying = false
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+            persistSession()
+            updateNowPlayingInfo()
+            return
+        }
+
+        startEngine(item: item, playURL: item.url, startPosition: startPosition, autoPlay: autoPlay)
+    }
+
+    /// The URL the engine is actually playing: the file itself, or a library item's
+    /// signed stream link (which differs from `item.url`, the stable shelf:// form).
+    private var playbackURL: URL?
+
+    /// Loads `playURL` into the right engine and starts it. `forceMPV` is for library
+    /// items with subtitle files, which only the mpv engine can render.
+    private func startEngine(item: MediaItem, playURL: URL, startPosition: Double, autoPlay: Bool, forceMPV: Bool = false) {
+        playbackURL = playURL
+        let requiredEngineKind = forceMPV ? .mpv : MediaFormat.requiredEngine(for: playURL)
         if requiredEngineKind != activeEngineKind {
             activeEngine.stop()
         }
         activeEngineKind = requiredEngineKind
 
-        activeEngine.load(url: item.url)
+        activeEngine.load(url: playURL)
         activeEngine.setVolume(volume, muted: isMuted)
         activeEngine.setRate(playbackRate)
         // Re-synced on every play(), not just when they change — switching from an
@@ -771,7 +836,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             duration = 0
             bufferedFraction = 0
             isVideoTrackPresent = true
-            mpvEngine.load(url: item.url)
+            mpvEngine.load(url: playbackURL ?? item.url)
             mpvEngine.setVolume(volume, muted: isMuted)
             mpvEngine.setRate(playbackRate)
             applySubtitleRenderingMode()
@@ -780,7 +845,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             if wasPlaying { mpvEngine.play() } else { mpvEngine.pause() }
             isPlaying = wasPlaying
         }
-        mpvEngine.addExternalSubtitle(url: RollUpCaptions.playableURL(for: url))
+        mpvEngine.addExternalSubtitle(url: url.isFileURL ? RollUpCaptions.playableURL(for: url) : url)
         objectWillChange.send()
     }
 
