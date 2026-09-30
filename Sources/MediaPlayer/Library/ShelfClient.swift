@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 // Client for shelf, the media server on the desktop (github.com/MasonKimball05/shelf),
 // reached over Tailscale.
@@ -15,8 +15,18 @@ struct ShelfFile: Codable, Identifiable, Hashable {
     let name: String
     let kind: String
     let size: Int64
+    /// Where playback last stopped, on any Mac, and the file's length (seconds).
+    /// Missing when it hasn't been started or was watched to the end.
+    let position: Double?
+    let duration: Double?
 
     var isVideo: Bool { kind == "video" }
+
+    /// 0...1 for a progress bar, when both numbers are known.
+    var watchedFraction: Double? {
+        guard let position, let duration, duration > 0 else { return nil }
+        return min(max(position / duration, 0), 1)
+    }
 }
 
 struct ShelfListing: Codable {
@@ -37,6 +47,8 @@ struct ShelfLink: Codable {
     let size: Int64
     let expires: Int64
     let subtitles: [ShelfLink]?
+    /// Where playback last stopped, on any Mac.
+    let position: Double?
 }
 
 enum ShelfError: LocalizedError {
@@ -109,11 +121,42 @@ final class ShelfClient: @unchecked Sendable {
 
     /// A fresh signed stream link for a stable shelf:// item URL.
     func link(forItemURL url: URL) async throws -> ShelfLink {
-        guard Self.isShelfURL(url), let id = url.host, !id.isEmpty else { throw ShelfError.notFound }
+        guard let id = Self.fileID(of: url) else { throw ShelfError.notFound }
         return try await request("POST", "api/link", query: [.init(name: "id", value: id)])
     }
 
+    /// The file ID inside a stable shelf:// item URL.
+    static func fileID(of url: URL) -> String? {
+        guard isShelfURL(url), let id = url.host, !id.isEmpty else { return nil }
+        return id
+    }
+
+    /// A video's poster frame as JPEG data. Throws `.notFound` for files without one
+    /// (audio, unreadable video) and when the server has no ffmpeg.
+    func thumbnail(id: String) async throws -> Data {
+        // The first view of a folder makes the server run ffmpeg for each video (two at
+        // a time), so later rows can wait longer than the API's usual 8 seconds.
+        try await send("GET", "api/thumb", query: [.init(name: "id", value: id)], timeout: 60)
+    }
+
+    /// Saves where playback is in a library file, so it resumes there on any Mac.
+    func saveProgress(id: String, position: Double, duration: Double) async throws {
+        struct Body: Encodable { let id: String; let position: Double; let duration: Double }
+        let body = try JSONEncoder().encode(Body(id: id, position: position, duration: duration))
+        _ = try await send("POST", "api/progress", body: body)
+    }
+
     private func request<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem] = []) async throws -> T {
+        let data = try await send(method, path, query: query)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw ShelfError.badResponse
+        }
+    }
+
+    private func send(_ method: String, _ path: String, query: [URLQueryItem] = [], body: Data? = nil,
+                      timeout: TimeInterval? = nil) async throws -> Data {
         guard let base = baseURL, let token = Keychain.read(account: Self.keychainAccount) else {
             throw ShelfError.notConfigured
         }
@@ -125,7 +168,12 @@ final class ShelfClient: @unchecked Sendable {
 
         var req = URLRequest(url: url)
         req.httpMethod = method
+        if let timeout { req.timeoutInterval = timeout }
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            req.httpBody = body
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
 
         let data: Data
         let response: URLResponse
@@ -142,15 +190,48 @@ final class ShelfClient: @unchecked Sendable {
         }
         guard let http = response as? HTTPURLResponse else { throw ShelfError.badResponse }
         switch http.statusCode {
-        case 200: break
+        case 200..<300: return data
         case 401: throw ShelfError.unauthorized
         case 404: throw ShelfError.notFound
         default: throw ShelfError.server(http.statusCode)
         }
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw ShelfError.badResponse
+    }
+}
+
+/// Library poster frames for the sidebar, kept in memory for the session. Files
+/// without one (audio, unreadable video, no ffmpeg on the desktop) are remembered
+/// too, so rows scrolling back into view don't ask again. Network failures aren't:
+/// those are retried the next time the row appears.
+@MainActor
+final class ShelfThumbnails {
+    static let shared = ShelfThumbnails()
+
+    private let images = NSCache<NSString, NSImage>()
+    private var missing = Set<String>()
+    private var loading: [String: Task<NSImage?, Never>] = [:]
+
+    func cached(_ id: String) -> NSImage? { images.object(forKey: id as NSString) }
+
+    func image(for id: String) async -> NSImage? {
+        if let image = cached(id) { return image }
+        if missing.contains(id) { return nil }
+        if let task = loading[id] { return await task.value }
+
+        let task = Task { [weak self] () -> NSImage? in
+            do {
+                let data = try await ShelfClient.shared.thumbnail(id: id)
+                return NSImage(data: data)
+            } catch ShelfError.notFound {
+                self?.missing.insert(id)
+                return nil
+            } catch {
+                return nil
+            }
         }
+        loading[id] = task
+        let image = await task.value
+        loading[id] = nil
+        if let image { images.setObject(image, forKey: id as NSString) }
+        return image
     }
 }

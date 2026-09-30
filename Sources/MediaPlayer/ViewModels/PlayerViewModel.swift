@@ -451,6 +451,9 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             return
         }
 
+        // Last word on the item being left, before currentItemID moves on.
+        reportLibraryProgress(force: true)
+
         let startPosition = resumeAt ?? storedResumePosition(for: item.url)
         errorMessage = nil
         isLoading = true
@@ -478,7 +481,11 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
                     guard let self, self.currentItemID == item.id else { return }
                     guard let streamURL = URL(string: link.url) else { throw ShelfError.badResponse }
                     let subtitles = (link.subtitles ?? []).compactMap { URL(string: $0.url) }
-                    self.startEngine(item: item, playURL: streamURL, startPosition: startPosition,
+                    // The desktop's saved position is shared by every Mac, so it beats
+                    // this Mac's own unless the caller asked for a specific spot.
+                    let start = resumeAt == nil ? (link.position ?? startPosition) : startPosition
+                    self.currentTime = start
+                    self.startEngine(item: item, playURL: streamURL, startPosition: start,
                                      autoPlay: autoPlay, forceMPV: !subtitles.isEmpty)
                     subtitles.forEach { self.mpvEngine.addExternalSubtitle(url: $0) }
                 } catch {
@@ -594,6 +601,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     func togglePlayPause() {
         if isPlaying {
             activeEngine.pause()
+            reportLibraryProgress(force: true)
         } else {
             activeEngine.setRate(playbackRate)
             activeEngine.play()
@@ -663,6 +671,7 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
             lastSessionSaveDate = now
             persistSession()
             recordFileResumePosition()
+            reportLibraryProgress()
             updateNowPlayingInfo()
         }
     }
@@ -710,6 +719,8 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
     }
 
     func engineDidReachEndOfMedia() {
+        // Watched to the end: the desktop forgets the position, like this Mac does.
+        reportLibraryProgress(force: true, position: duration)
         if repeatMode == .one {
             seek(to: 0)
             activeEngine.play()
@@ -908,6 +919,23 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         }
         guard let data = try? JSONEncoder().encode(positions) else { return }
         UserDefaults.standard.set(data, forKey: AppSettingsKeys.perFileResumePositions)
+    }
+
+    private var lastLibraryProgressReport = Date.distantPast
+
+    /// Library items also save their position on the desktop, so they resume there on
+    /// any Mac (see shelf's /api/progress). Throttled to every 10 seconds during playback;
+    /// `force` sends right away (pause, switching items, the end of the file). It's
+    /// fire-and-forget: if the desktop is off, this Mac's own position still covers it.
+    private func reportLibraryProgress(force: Bool = false, position: Double? = nil) {
+        guard let item = currentItem, let id = ShelfClient.fileID(of: item.url), duration > 0 else { return }
+        let now = Date()
+        guard force || now.timeIntervalSince(lastLibraryProgressReport) >= 10 else { return }
+        lastLibraryProgressReport = now
+        let at = position ?? currentTime, length = duration
+        Task.detached {
+            try? await ShelfClient.shared.saveProgress(id: id, position: at, duration: length)
+        }
     }
 
     /// The raw material for the home screen's "Continue Watching" row: recently-opened

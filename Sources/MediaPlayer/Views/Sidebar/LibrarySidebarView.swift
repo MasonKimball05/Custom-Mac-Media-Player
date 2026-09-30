@@ -118,14 +118,17 @@ struct LibrarySidebarView: View {
     }
 
     private func fileRow(_ file: ShelfFile, showPath: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Label(file.name, systemImage: file.isVideo ? "film" : "music.note")
-                .lineLimit(1)
-            Text(showPath ? "\(file.root)/\(file.path)" : ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+        HStack(spacing: 8) {
+            ShelfThumbnailView(file: file)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(file.name)
+                    .lineLimit(1)
+                Text(caption(for: file, showPath: showPath))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
         }
         .tag("file:" + file.id)
         .contentShape(Rectangle())
@@ -135,6 +138,19 @@ struct LibrarySidebarView: View {
             Button("Add to Playlist") { viewModel.enqueueLibraryFiles([file]) }
         }
         .help(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
+    }
+
+    private func caption(for file: ShelfFile, showPath: Bool) -> String {
+        let base = showPath ? "\(file.root)/\(file.path)" : ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
+        guard let position = file.position, position > 0 else { return base }
+        return "\(base) \u{00B7} resume at \(Self.timestamp(position))"
+    }
+
+    private static func timestamp(_ seconds: Double) -> String {
+        let s = Int(seconds)
+        return s >= 3600
+            ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
+            : String(format: "%d:%02d", s / 60, s % 60)
     }
 
     private func unavailable(_ message: String) -> some View {
@@ -206,6 +222,46 @@ struct LibrarySidebarView: View {
         } catch is CancellationError {
         } catch {
             state = .failed(error.localizedDescription)
+        }
+    }
+}
+
+/// A library file's poster frame (or a film/music icon until there is one), with a
+/// bar along the bottom showing how much of it has been watched.
+private struct ShelfThumbnailView: View {
+    let file: ShelfFile
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4).fill(.quaternary)
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Image(systemName: file.isVideo ? "film" : "music.note")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 64, height: 36)
+        .overlay(alignment: .bottomLeading) {
+            if let fraction = file.watchedFraction {
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(Color.accentColor)
+                        .frame(width: geo.size.width * fraction, height: 3)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .task(id: file.id) {
+            guard file.isVideo else { return }
+            image = ShelfThumbnails.shared.cached(file.id)
+            if image == nil {
+                image = await ShelfThumbnails.shared.image(for: file.id)
+            }
         }
     }
 }
