@@ -45,6 +45,15 @@ final class MPVEngine: NSObject, PlaybackEngine, @unchecked Sendable {
         }
 
         mpv_set_option_string(handle, "vo", "libmpv")
+        // mpv's default macOS audio output (coreaudio) crashes the app when the system's
+        // audio devices change around the time it closes: it registers a CoreAudio listener
+        // with a pointer to itself, and CoreAudio can still deliver an already-queued
+        // notification after the listener is removed and that memory is freed (a crash in
+        // hotplug_cb). Connecting AirPods or waking from sleep while a file stops was enough.
+        // The AVFoundation output follows device changes through AVSampleBufferAudioRenderer
+        // and never registers that listener. coreaudio stays as the fallback so audio still
+        // plays if AVFoundation's output can't open.
+        mpv_set_option_string(handle, "ao", "avfoundation,coreaudio")
         // mpv's own default cap is 130 — raised so the app-level volume-boost setting
         // (which is what actually gates whether callers ever send >100 here) isn't
         // silently clamped a second time underneath it.
