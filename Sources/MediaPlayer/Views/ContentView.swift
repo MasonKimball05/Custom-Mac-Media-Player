@@ -108,7 +108,12 @@ struct ContentView: View {
         // normal window it always stays visible — that's the only way to reach it.
         .toolbar(isFullscreen && !controlsVisible ? .hidden : .visible, for: .windowToolbar)
         .onOpenFile { url in
-            viewModel.addFiles([url])
+            if ShelfClient.isShelfURL(url) {
+                viewModel.playLibraryItem(at: url)
+                showingHomeScreen = false
+            } else {
+                viewModel.addFiles([url])
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openMediaFile)) { _ in
             openFilePanel()

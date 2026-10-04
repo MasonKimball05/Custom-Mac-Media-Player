@@ -375,6 +375,28 @@ final class PlayerViewModel: NSObject, ObservableObject, PlaybackEngineDelegate 
         recordRecentFile(item)
     }
 
+    /// Plays a library item handed over as a shelf:// link (from Hop, say), reusing its
+    /// playlist entry if it's already queued. Anything that isn't a well-formed shelf
+    /// link (an ID of 24 hex characters plus a name) is ignored.
+    func playLibraryItem(at url: URL) {
+        guard let id = ShelfClient.fileID(of: url), id.count == 24, id.allSatisfy(\.isHexDigit),
+              !url.lastPathComponent.isEmpty, url.lastPathComponent != "/" else { return }
+        if let existing = playlist.first(where: { $0.fileIdentity == url.absoluteString }) {
+            play(item: existing)
+            return
+        }
+        var item = MediaItem(url: url)
+        item.isVideo = !Self.audioExtensions.contains(url.pathExtension.lowercased())
+        playlist.append(item)
+        play(item: item)
+        regenerateShuffleOrder()
+        persistSession()
+        recordRecentFile(item)
+    }
+
+    /// The audio formats shelf serves (its library.kinds), for links that only carry a name.
+    private static let audioExtensions: Set<String> = ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "alac", "aiff", "wma"]
+
     /// Adds library files to the end of the queue without playing them.
     func enqueueLibraryFiles(_ files: [ShelfFile]) {
         let existing = Set(playlist.map(\.fileIdentity))
